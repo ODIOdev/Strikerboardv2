@@ -1,0 +1,501 @@
+"use client";
+
+import { FormEvent, useState } from "react";
+import { ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  bandFor,
+  categoryScore,
+  formatScore,
+  itemPoints,
+  pointsLabel,
+  ZONE_PLAY_POINTS,
+} from "@/lib/scoring";
+import type {
+  Category,
+  Confluence,
+  ScoreResult,
+  Timeframe,
+  TfSide,
+  ZonePlay,
+} from "@/lib/types";
+import {
+  CATEGORIES,
+  TIMEFRAMES,
+  isZoneCategory,
+  isStructureCategory,
+  resolveCategory,
+} from "@/lib/types";
+
+type ConfluenceBoardProps = {
+  result: ScoreResult;
+  confluences: Confluence[];
+  onTfBias: (id: string, timeframe: Timeframe, bias: TfSide) => void;
+  onTfZone: (id: string, timeframe: Timeframe, play: ZonePlay) => void;
+  onPatch: (id: string, patch: Partial<Omit<Confluence, "id">>) => void;
+  onAdd: (input: { name: string; category: Category; weight: number }) => void;
+  onRemove: (id: string) => void;
+  onRestore: () => void;
+};
+
+function barColor(score: number) {
+  if (score >= 80) return "var(--gold)";
+  if (score >= 60) return "var(--bias)";
+  return "#8b907c";
+}
+
+const WIN_STYLE = {
+  bullish: { background: "#b6ff3b", color: "#0b1204" },
+  bearish: { background: "#ff3b5c", color: "#1a0508" },
+  range: { background: "#f4c430", color: "#16120a" },
+  even: {
+    border: "1px solid rgb(255 255 255 / 12%)",
+    color: "#8b907c",
+  },
+} as const;
+
+const TF_CHIP: Record<Timeframe, string> = {
+  5: "bg-[#4de8c8]/20 text-[#4de8c8]",
+  15: "bg-[#f4c430]/20 text-[#f4c430]",
+  30: "bg-[#b6ff3b]/20 text-[#b6ff3b]",
+};
+
+export function ConfluenceBoard({
+  result,
+  confluences,
+  onTfBias,
+  onTfZone,
+  onPatch,
+  onAdd,
+  onRemove,
+  onRestore,
+}: ConfluenceBoardProps) {
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState<Category>("News / Events");
+  const [weight, setWeight] = useState(8);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [open, setOpen] = useState<Partial<Record<Category, boolean>>>({});
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    onAdd({ name, category, weight });
+    setOpen((prev) => ({ ...prev, [category]: true }));
+    setName("");
+    setWeight(8);
+  }
+
+  function toggle(group: Category) {
+    setOpen((prev) => ({ ...prev, [group]: !prev[group] }));
+  }
+
+  return (
+    <section className="rounded-2xl border border-white/8 bg-black/35 p-4">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="font-mono text-[10px] tracking-[0.4em] text-muted-foreground">
+            CONFLUENCE BOARD
+          </p>
+          <h2 className="text-xl font-semibold tracking-tight">Weighted checklist</h2>
+        </div>
+        <Button type="button" size="sm" variant="outline" onClick={onRestore}>
+          Reset checklist
+        </Button>
+      </div>
+
+      <div className="space-y-2">
+        {CATEGORIES.map((group) => {
+          const rows = confluences.filter(
+            (item) => resolveCategory(item.category) === group,
+          );
+          const score = categoryScore(result, group);
+          const expanded = Boolean(open[group]);
+          const tone = barColor(score);
+          const winning = result.byCategory[group]?.winning ?? "even";
+          const winningLabel =
+            winning === "bullish"
+              ? "BULL"
+              : winning === "bearish"
+                ? "BEAR"
+                : winning === "range"
+                  ? "RANGE"
+                  : "FLAT";
+
+          return (
+            <div
+              key={group}
+              className="overflow-hidden rounded-xl border border-white/8 bg-white/[0.02]"
+            >
+              <button
+                type="button"
+                onClick={() => toggle(group)}
+                aria-expanded={expanded}
+                className="flex w-full items-center gap-3 px-3 py-2.5 text-left"
+              >
+                <ChevronRight
+                  className={`size-3.5 shrink-0 text-muted-foreground transition-transform ${
+                    expanded ? "rotate-90" : ""
+                  }`}
+                />
+                <span className="min-w-0 flex-1 truncate font-mono text-[10px] tracking-[0.22em] text-gold">
+                  {group.toUpperCase()}
+                </span>
+                <span className="hidden h-1.5 w-24 overflow-hidden rounded-full bg-white/8 sm:block sm:w-32">
+                  <span
+                    className="block h-full rounded-full"
+                    style={{ width: `${Math.min(100, score)}%`, background: tone }}
+                  />
+                </span>
+                <span
+                  className="w-8 shrink-0 text-right font-mono text-xs"
+                  style={{ color: tone }}
+                >
+                  {formatScore(score)}
+                </span>
+                <span
+                  className="rounded-full px-2 py-0.5 font-mono text-[10px] tracking-widest"
+                  style={WIN_STYLE[winning]}
+                >
+                  {winningLabel}
+                </span>
+              </button>
+
+              <div className="h-1 bg-white/8 sm:hidden">
+                <div
+                  className="h-full"
+                  style={{ width: `${Math.min(100, score)}%`, background: tone }}
+                />
+              </div>
+
+              {expanded ? (
+                <div className="border-t border-white/8 px-3 py-2">
+                  {rows.length === 0 ? (
+                    <p className="px-1 py-2 font-mono text-[10px] tracking-widest text-muted-foreground">
+                      NO PRINTS · {bandFor(score).toUpperCase()}
+                    </p>
+                  ) : (
+                    <ul className="space-y-1.5">
+                      {rows.map((item) => {
+                        const earned = itemPoints(item);
+                        const showZonePlay = isZoneCategory(item.category);
+                        const showCandleConfirm = isStructureCategory(
+                          item.category,
+                        );
+                        return (
+                          <li
+                            key={item.id}
+                            className={`grid grid-cols-1 items-center gap-2 rounded-xl border border-white/6 bg-black/20 px-3 py-2 ${
+                              item.active || editingId === item.id ? "" : "opacity-45"
+                            }`}
+                          >
+                            <div className="flex min-w-0 items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={item.active}
+                                onChange={() =>
+                                  onPatch(item.id, { active: !item.active })
+                                }
+                                aria-label={`Activate ${item.name}`}
+                                className="size-4 shrink-0 rounded border-white/20 bg-black/40 accent-[#f4c430]"
+                              />
+                              {editingId === item.id ? (
+                                <ConfluenceEditor
+                                  item={item}
+                                  showZonePlay={showZonePlay}
+                                  onPatch={onPatch}
+                                  onDone={() => setEditingId(null)}
+                                />
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingId(item.id)}
+                                  className="flex min-w-0 items-center gap-2 text-left text-sm"
+                                >
+                                  <Pencil className="size-3 shrink-0 text-muted-foreground" />
+                                  <span className="truncate">{item.name}</span>
+                                  <span className="shrink-0 font-mono text-[10px] tracking-widest text-muted-foreground">
+                                    WT{" "}
+                                    {showZonePlay
+                                      ? `${ZONE_PLAY_POINTS.reaction}/${ZONE_PLAY_POINTS.breakout}`
+                                      : item.weight}
+                                  </span>
+                                </button>
+                              )}
+                              {showCandleConfirm ? (
+                                <label className="ml-auto flex shrink-0 items-center gap-1.5 font-mono text-[10px] tracking-wide text-muted-foreground">
+                                  <input
+                                    type="checkbox"
+                                    checked={item.candleConfirmed}
+                                    onChange={() =>
+                                      onPatch(item.id, {
+                                        candleConfirmed: !item.candleConfirmed,
+                                      })
+                                    }
+                                    className="size-3.5 rounded border-white/20 bg-black/40 accent-[#4de8c8]"
+                                  />
+                                  Confirmed new candle
+                                </label>
+                              ) : null}
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2">
+                              <label className="flex items-center gap-1.5 font-mono text-[10px] tracking-widest text-muted-foreground">
+                                WT
+                                {showZonePlay ? (
+                                  <span className="inline-flex h-7 w-14 items-center justify-center rounded-md border border-white/10 bg-black/40 text-[9px] tracking-wide text-foreground">
+                                    {ZONE_PLAY_POINTS.reaction}/{ZONE_PLAY_POINTS.breakout}
+                                  </span>
+                                ) : (
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    max={100}
+                                    value={item.weight}
+                                    onChange={(event) =>
+                                      onPatch(item.id, {
+                                        weight: clampWeight(event.target.value),
+                                      })
+                                    }
+                                    className="h-7 w-14 rounded-md border border-white/10 bg-black/40 px-1 text-center text-foreground"
+                                  />
+                                )}
+                              </label>
+
+                              <div className="grid min-w-0 flex-1 grid-cols-3 gap-2">
+                              {TIMEFRAMES.map((timeframe) => {
+                                const tfBias = item.biasByTf?.[timeframe] ?? "bullish";
+                                const zonePlay =
+                                  item.zoneByTf?.[timeframe] ?? "reaction";
+                                return (
+                                  <div
+                                    key={timeframe}
+                                    className="flex min-w-0 flex-col gap-0.5 overflow-hidden rounded-lg border border-white/10 p-0.5"
+                                  >
+                                    <span
+                                      className={`inline-flex h-6 w-full items-center justify-center rounded-md font-mono text-[10px] tracking-widest ${TF_CHIP[timeframe]}`}
+                                    >
+                                      {timeframe}m
+                                    </span>
+                                    <div className="grid grid-cols-3 gap-0.5">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          onTfBias(item.id, timeframe, "bullish")
+                                        }
+                                        className={`truncate rounded-md px-0.5 py-1 text-center font-mono text-[9px] tracking-wide transition ${
+                                          tfBias === "bullish"
+                                            ? "bg-[#b6ff3b] text-[#0b1204]"
+                                            : "text-muted-foreground hover:text-foreground"
+                                        }`}
+                                      >
+                                        LONG
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          onTfBias(item.id, timeframe, "bearish")
+                                        }
+                                        className={`truncate rounded-md px-0.5 py-1 text-center font-mono text-[9px] tracking-wide transition ${
+                                          tfBias === "bearish"
+                                            ? "bg-[#ff3b5c] text-[#1a0508]"
+                                            : "text-muted-foreground hover:text-foreground"
+                                        }`}
+                                      >
+                                        SHORT
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          onTfBias(item.id, timeframe, "range")
+                                        }
+                                        className={`truncate rounded-md px-0.5 py-1 text-center font-mono text-[9px] tracking-wide transition ${
+                                          tfBias === "range"
+                                            ? "bg-gold text-primary-foreground"
+                                            : "text-muted-foreground hover:text-foreground"
+                                        }`}
+                                      >
+                                        RANGE
+                                      </button>
+                                    </div>
+                                    {showZonePlay ? (
+                                      <div
+                                        className="grid grid-cols-2 gap-0.5"
+                                        aria-label={`${timeframe}m zone play`}
+                                      >
+                                        <button
+                                          type="button"
+                                          title="Reaction · 50 pts"
+                                          aria-pressed={zonePlay === "reaction"}
+                                          onClick={() =>
+                                            onTfZone(
+                                              item.id,
+                                              timeframe,
+                                              "reaction",
+                                            )
+                                          }
+                                          className={`truncate rounded-md px-0.5 py-1 text-center font-mono text-[8px] tracking-wide transition ${
+                                            zonePlay === "reaction"
+                                              ? "bg-[#4de8c8] text-[#041210]"
+                                              : "text-muted-foreground hover:text-foreground"
+                                          }`}
+                                        >
+                                          REACTION
+                                        </button>
+                                        <button
+                                          type="button"
+                                          title="Breakout · 75 pts"
+                                          aria-pressed={zonePlay === "breakout"}
+                                          onClick={() =>
+                                            onTfZone(
+                                              item.id,
+                                              timeframe,
+                                              "breakout",
+                                            )
+                                          }
+                                          className={`truncate rounded-md px-0.5 py-1 text-center font-mono text-[8px] tracking-wide transition ${
+                                            zonePlay === "breakout"
+                                              ? "bg-[#ff8a3b] text-[#1a0c04]"
+                                              : "text-muted-foreground hover:text-foreground"
+                                          }`}
+                                        >
+                                          BREAKOUT
+                                        </button>
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                );
+                              })}
+                              </div>
+
+                              <div className="ml-auto flex items-center gap-2">
+                                <span className="font-mono text-xs text-gold">
+                                  +{pointsLabel(earned)}
+                                  {item.candleConfirmed ? (
+                                    <span className="ml-1 text-[10px] text-[#4de8c8]">
+                                      +25%
+                                    </span>
+                                  ) : null}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => onRemove(item.id)}
+                                  className="rounded-md p-1 text-muted-foreground hover:text-destructive"
+                                  aria-label={`Remove ${item.name}`}
+                                >
+                                  <Trash2 className="size-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+
+      <form
+        onSubmit={submit}
+        className="mt-5 grid grid-cols-1 gap-2 border-t border-white/8 pt-4 sm:grid-cols-[1fr_auto_auto_auto]"
+      >
+        <Input
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder="Add confluence…"
+        />
+        <select
+          value={category}
+          onChange={(event) => setCategory(event.target.value as Category)}
+          className="h-8 min-w-[11rem] appearance-none rounded-lg border border-white/10 bg-black/40 bg-[length:12px] bg-[position:right_12px_center] bg-no-repeat py-0 pr-9 pl-2 text-sm"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b907c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
+          }}
+        >
+          {CATEGORIES.map((item) => (
+            <option key={item} value={item}>
+              {item}
+            </option>
+          ))}
+        </select>
+        <input
+          type="number"
+          min={1}
+          max={100}
+          value={weight}
+          onChange={(event) => setWeight(Number(event.target.value) || 1)}
+          className="h-8 w-full rounded-lg border border-white/10 bg-black/40 px-2 font-mono text-sm sm:w-[4.5rem]"
+          aria-label="Weight"
+        />
+        <Button type="submit" size="sm">
+          <Plus className="size-3.5" />
+          Add
+        </Button>
+      </form>
+    </section>
+  );
+}
+
+function clampWeight(value: string) {
+  return Math.min(100, Math.max(1, Number(value) || 1));
+}
+
+function ConfluenceEditor({
+  item,
+  showZonePlay,
+  onPatch,
+  onDone,
+}: {
+  item: Confluence;
+  showZonePlay: boolean;
+  onPatch: (id: string, patch: Partial<Omit<Confluence, "id">>) => void;
+  onDone: () => void;
+}) {
+  return (
+    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+      <Input
+        autoFocus
+        value={item.name}
+        onChange={(event) => onPatch(item.id, { name: event.target.value })}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === "Escape") onDone();
+        }}
+        aria-label="Confluence name"
+        className="h-7 min-w-0 flex-1"
+      />
+      {showZonePlay ? (
+        <span className="inline-flex h-7 items-center rounded-md border border-white/10 bg-black/40 px-2 font-mono text-[10px] tracking-widest text-muted-foreground">
+          WT {ZONE_PLAY_POINTS.reaction}/{ZONE_PLAY_POINTS.breakout}
+        </span>
+      ) : (
+        <label className="flex items-center gap-1.5 font-mono text-[10px] tracking-widest text-muted-foreground">
+          WT
+          <input
+            type="number"
+            min={1}
+            max={100}
+            value={item.weight}
+            onChange={(event) =>
+              onPatch(item.id, { weight: clampWeight(event.target.value) })
+            }
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === "Escape") onDone();
+            }}
+            aria-label={`Weight for ${item.name}`}
+            className="h-7 w-14 rounded-md border border-white/10 bg-black/40 px-1 text-center text-foreground"
+          />
+        </label>
+      )}
+      <button
+        type="button"
+        onClick={onDone}
+        className="rounded-md border border-gold/40 bg-gold/15 px-2 py-1 font-mono text-[10px] tracking-widest text-gold"
+      >
+        DONE
+      </button>
+    </div>
+  );
+}
