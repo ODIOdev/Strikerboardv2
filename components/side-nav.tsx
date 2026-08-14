@@ -50,6 +50,26 @@ function CalendarIcon({ className }: { className?: string }) {
   );
 }
 
+function AnalyticsIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M3 3v18h18" />
+      <path d="M7 16v-5" />
+      <path d="M12 16V8" />
+      <path d="M17 16v-9" />
+    </svg>
+  );
+}
+
 function RecentIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -126,7 +146,7 @@ function RecentTradesButton({
         onMouseLeave={hidePreview}
         onOpenAutoFocus={(event) => event.preventDefault()}
         onCloseAutoFocus={(event) => event.preventDefault()}
-        className="w-80 max-h-[28rem] gap-1 overflow-y-auto border-white/10 bg-[#0c0e14] p-2 shadow-xl"
+        className="w-80 max-h-[28rem] gap-1 overflow-y-auto border-gold/30 bg-[#161920] p-2 shadow-[0_16px_48px_rgb(0_0_0_/_70%),0_0_28px_rgb(244_196_48_/_18%)] ring-1 ring-white/10"
       >
         <ClosedBookPreview />
       </PopoverContent>
@@ -174,12 +194,15 @@ function NavPanel({ closeOnNavigate = false }: { closeOnNavigate?: boolean }) {
   const [bookOpen, setBookOpen] = useState(true);
 
   return (
-    <nav className="flex min-h-0 flex-1 flex-col gap-6 p-4">
-      <div>
-        <p className="font-mono text-[10px] tracking-[0.35em] text-muted-foreground">
-          STRIKER
-        </p>
-        <p className="mt-1 text-lg font-semibold tracking-tight">Desk</p>
+    <nav className="flex min-h-0 flex-1 flex-col gap-6 px-4 pb-4">
+      <div className="flex h-48 shrink-0 items-center justify-center">
+        <Link href="/" className="flex justify-center">
+          <img
+            src="/logo-icon.webp"
+            alt="DeskStriker"
+            className="h-14 w-auto"
+          />
+        </Link>
       </div>
 
       <NavLink
@@ -205,9 +228,17 @@ function NavPanel({ closeOnNavigate = false }: { closeOnNavigate?: boolean }) {
           closeOnNavigate={closeOnNavigate}
         >
           <CalendarIcon className="size-3.5" />
-          Calendar
+          Ideas
         </NavLink>
         <RecentTradesButton closeOnNavigate={closeOnNavigate} />
+        <NavLink
+          href="/analytics"
+          active={pathname === "/analytics"}
+          closeOnNavigate={closeOnNavigate}
+        >
+          <AnalyticsIcon className="size-3.5" />
+          Analytics
+        </NavLink>
       </section>
 
       <section className="min-h-0 flex-1 space-y-1.5 overflow-y-auto">
@@ -278,7 +309,7 @@ function NavPanel({ closeOnNavigate = false }: { closeOnNavigate?: boolean }) {
 
 export function SideNav() {
   return (
-    <aside className="sticky top-0 hidden h-screen w-56 shrink-0 flex-col border-r border-white/8 bg-black/50 backdrop-blur-md lg:flex">
+    <aside className="fixed inset-y-0 left-0 z-40 hidden h-dvh w-56 flex-col overflow-hidden border-r border-white/8 bg-black/50 backdrop-blur-md lg:flex">
       <NavPanel />
     </aside>
   );
@@ -315,7 +346,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen">
       <SideNav />
-      <div className="min-w-0 flex-1">{children}</div>
+      <div className="min-w-0 flex-1 lg:pl-56">{children}</div>
     </div>
   );
 }

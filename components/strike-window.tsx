@@ -1,13 +1,32 @@
 "use client";
 
+import { FormEvent, useMemo, useState } from "react";
 import { motion } from "framer-motion";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  calculateTrade,
+  money,
+  outcomeAtExit,
+  pnlAtExit,
+  qty,
+} from "@/lib/calculator";
 import { categoryScore } from "@/lib/scoring";
-import type { Band, ScoreResult, TfSide, TradeOutcome } from "@/lib/types";
+import type { Band, CalculatorInput, ScoreResult, TfSide } from "@/lib/types";
 import { CATEGORY_SHORT, RAIL_CATEGORIES } from "@/lib/types";
 
 type StrikeWindowProps = {
   result: ScoreResult;
-  onClose: (outcome: TradeOutcome) => void;
+  ticker: string;
+  calculator: CalculatorInput;
+  onClose: (exitPrice: number) => void;
 };
 
 const SIDE: Record<
@@ -63,12 +82,46 @@ function pipColor(winning: TfSide | "even", score: number) {
   return "#8b907c";
 }
 
-export function StrikeWindow({ result, onClose }: StrikeWindowProps) {
+export function StrikeWindow({
+  result,
+  ticker,
+  calculator,
+  onClose,
+}: StrikeWindowProps) {
   const side = SIDE[result.overall.winning];
   const copy = copyFor(result.overall.winning, result.band);
   const blocker = [...result.contributions]
     .filter((item) => item.earned < item.max)
     .sort((a, b) => b.max - b.earned - (a.max - a.earned))[0];
+  const [open, setOpen] = useState(false);
+  const [price, setPrice] = useState("");
+
+  const calc = calculateTrade(calculator, ticker);
+  const exit = Number(price);
+  const ready =
+    Number.isFinite(exit) &&
+    exit > 0 &&
+    calculator.entry > 0 &&
+    calc.size > 0;
+  const preview = useMemo(() => {
+    if (!(Number.isFinite(exit) && exit > 0 && calculator.entry > 0)) {
+      return null;
+    }
+    const pnl = pnlAtExit(calculator, ticker, exit);
+    const outcome = outcomeAtExit(calculator, exit);
+    const move =
+      calculator.side === "short"
+        ? calculator.entry - exit
+        : exit - calculator.entry;
+    return { pnl, outcome, size: calc.size, sizeLabel: calc.sizeLabel, move };
+  }, [calc.size, calc.sizeLabel, calculator, ticker, exit]);
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!ready) return;
+    onClose(exit);
+    setOpen(false);
+  }
 
   return (
     <div className="relative isolate min-h-[220px] overflow-hidden rounded-2xl border border-white/8 bg-black/35 p-4">
@@ -129,25 +182,150 @@ export function StrikeWindow({ result, onClose }: StrikeWindowProps) {
             ? `BLOCKER · ${blocker.name.toUpperCase()}`
             : "ALL RAILS ARMED"}
         </p>
-        <div className="grid grid-cols-2 gap-1.5">
-          <button
-            type="button"
-            onClick={() => onClose("won")}
-            className="group/won relative overflow-hidden rounded-md border border-[#b6ff3b]/40 bg-[#b6ff3b] px-2.5 py-1.5 font-mono text-[10px] font-semibold tracking-widest text-[#0b1204] shadow-[0_0_18px_rgb(182_255_59/0.35)] transition hover:bg-[#d4ff7a]"
-          >
-            <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/50 to-transparent transition-transform duration-500 ease-out group-hover/won:translate-x-full" />
-            <span className="relative">WON TRADE</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => onClose("lost")}
-            className="group/lost relative overflow-hidden rounded-md border border-[#ff3b5c]/40 bg-[#ff3b5c] px-2.5 py-1.5 font-mono text-[10px] font-semibold tracking-widest text-white shadow-[0_0_18px_rgb(255_59_92/0.35)] transition hover:bg-[#ff5c76]"
-          >
-            <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/40 to-transparent transition-transform duration-500 ease-out group-hover/lost:translate-x-full" />
-            <span className="relative">LOST TRADE</span>
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setPrice("");
+            setOpen(true);
+          }}
+          className="group/close relative overflow-hidden rounded-md border border-[#ff3b5c]/40 bg-[#ff3b5c] px-2.5 py-1.5 font-mono text-[10px] font-semibold tracking-widest text-white shadow-[0_0_18px_rgb(255_59_92/0.35)] transition hover:border-white hover:bg-white hover:text-[#1a0508] hover:shadow-[0_0_18px_rgb(255_255_255/0.28)]"
+        >
+          <span className="relative">CLOSE TRADE</span>
+        </button>
       </div>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader className="border-b border-white/8 pb-3">
+            <p className="font-mono text-[10px] tracking-[0.35em] text-muted-foreground">
+              EXIT
+            </p>
+            <DialogTitle className="font-mono text-xl tracking-[0.16em]">
+              {ticker || "UNTITLED"}
+            </DialogTitle>
+            <DialogDescription>
+              Enter the asset price. Win or loss is read from the calculator
+              ticket.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={submit} className="flex flex-col gap-4 px-4 pb-4">
+            <div className="grid grid-cols-4 gap-1.5">
+              <Level
+                label="ENTRY"
+                value={calculator.entry}
+                tone={calculator.side === "long" ? "#b6ff3b" : "#ff3b5c"}
+              />
+              <Level label="STOP" value={calculator.stop} tone="#ff3b5c" />
+              <Level label="TARGET" value={calculator.target} tone="#b6ff3b" />
+              <Level
+                label={calc.sizeLabel.toUpperCase()}
+                value={calc.size}
+                tone="#f4c430"
+              />
+            </div>
+            <p className="font-mono text-[10px] tracking-widest text-muted-foreground">
+              {calculator.side === "long" ? "LONG" : "SHORT"}
+              {calculator.entry <= 0 ? " · SET ENTRY ON THE CALCULATOR" : ""}
+              {calculator.entry > 0 && calc.size <= 0
+                ? ` · SET ${calc.sizeLabel.toUpperCase()} ON THE CALCULATOR`
+                : ""}
+            </p>
+            <label className="space-y-1.5">
+              <span className="font-mono text-[10px] tracking-[0.28em] text-gold">
+                ASSET PRICE
+              </span>
+              <Input
+                type="number"
+                inputMode="decimal"
+                step="any"
+                min="0"
+                value={price}
+                onChange={(event) => setPrice(event.target.value)}
+                placeholder="Exit price"
+                autoFocus
+                className="border-gold/40 bg-gold/10 font-mono caret-gold focus-visible:border-gold focus-visible:ring-gold/40"
+              />
+            </label>
+
+            {preview ? (
+              <div
+                className="rounded-xl border px-3 py-3"
+                style={{
+                  borderColor:
+                    preview.outcome === "won"
+                      ? "rgb(182 255 59 / 40%)"
+                      : "rgb(255 59 92 / 40%)",
+                  background:
+                    preview.outcome === "won"
+                      ? "rgb(182 255 59 / 10%)"
+                      : "rgb(255 59 92 / 10%)",
+                }}
+              >
+                <p
+                  className="font-mono text-[10px] font-black tracking-widest"
+                  style={{
+                    color: preview.outcome === "won" ? "#b6ff3b" : "#ff3b5c",
+                  }}
+                >
+                  {preview.outcome === "won" ? "WON" : "LOST"}
+                </p>
+                <p
+                  className="mt-1 font-mono text-3xl font-black tracking-tighter"
+                  style={{
+                    color: preview.pnl >= 0 ? "#b6ff3b" : "#ff3b5c",
+                  }}
+                >
+                  {preview.pnl > 0 ? "+" : preview.pnl < 0 ? "−" : ""}
+                  {money(Math.abs(preview.pnl), calculator.accountCurrency)}
+                </p>
+                <p className="mt-1 font-mono text-[10px] tracking-widest text-muted-foreground">
+                  {qty(preview.size)} {preview.sizeLabel.toUpperCase()}
+                  {" · "}
+                  {preview.move > 0 ? "+" : preview.move < 0 ? "−" : ""}
+                  {qty(Math.abs(preview.move), 4)} / UNIT
+                </p>
+              </div>
+            ) : (
+              <p className="font-mono text-[10px] tracking-widest text-muted-foreground">
+                PRICE VS ENTRY / STOP / TARGET DECIDES THE PRINT
+              </p>
+            )}
+
+            <Button
+              type="submit"
+              disabled={!ready}
+              className="font-mono tracking-widest"
+            >
+              CLOSE TRADE
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function Level({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone?: string;
+}) {
+  return (
+    <div className="rounded-lg border border-white/8 bg-black/30 px-2 py-1.5">
+      <p className="font-mono text-[8px] tracking-[0.22em] text-muted-foreground">
+        {label}
+      </p>
+      <p
+        className="mt-0.5 font-mono text-xs font-semibold tabular-nums"
+        style={tone ? { color: tone } : undefined}
+      >
+        {value > 0 ? qty(value, 4) : "—"}
+      </p>
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronRight, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ChartGallery } from "@/components/chart-gallery";
 import {
   ACCOUNT_CURRENCIES,
   ASSET_CLASSES,
@@ -12,14 +13,17 @@ import {
   createDefaultCalculator,
   inferAssetClass,
   isStockOptions,
+  levelsForSide,
   money,
   qty,
   sizeUnit,
   tickLabel,
 } from "@/lib/calculator";
 import type { AssetClass, CalculatorInput, EquityMode } from "@/lib/types";
+import { CHARTS_EVENT, countTradeCharts } from "@/lib/trade-charts";
 
 type TradeCalculatorProps = {
+  tradeId: string;
   ticker: string;
   value: CalculatorInput | undefined;
   onChange: (patch: Partial<CalculatorInput>) => void;
@@ -175,6 +179,7 @@ function readNumber(value: string): number {
 }
 
 export function TradeCalculator({
+  tradeId,
   ticker,
   value,
   onChange,
@@ -204,11 +209,27 @@ export function TradeCalculator({
   const options = isStockOptions(input);
   const unit = sizeUnit(input);
   const pip = tickLabel(input);
+  const farLevel = input.target > 0 ? input.target : result.derivedTarget;
+  const ticksAmount =
+    result.tickSize > 0 && input.stop > 0 && farLevel > 0
+      ? Math.abs(farLevel - input.stop) / result.tickSize
+      : Math.max(result.ticksToStop, result.ticksToTarget);
   const marginBlocked =
     result.margin > input.accountBalance && result.margin > 0;
   const warn =
     "border-[#ff3b5c]/60 bg-[#ff3b5c]/10 font-mono text-[#ff3b5c]";
   const [open, setOpen] = useState(false);
+  const [chartsOpen, setChartsOpen] = useState(false);
+  const [chartCount, setChartCount] = useState(0);
+
+  useEffect(() => {
+    function refresh() {
+      void countTradeCharts(tradeId).then(setChartCount);
+    }
+    refresh();
+    window.addEventListener(CHARTS_EVENT, refresh);
+    return () => window.removeEventListener(CHARTS_EVENT, refresh);
+  }, [tradeId]);
 
   return (
     <section className="rounded-2xl border border-white/8 bg-black/35 p-4">
@@ -222,7 +243,7 @@ export function TradeCalculator({
               event.preventDefault();
               onTicker(draft);
             }}
-            className="mt-1 flex max-w-md items-center gap-2"
+            className="mt-1 flex max-w-xl items-center gap-2"
           >
             <div className="relative min-w-0 flex-1">
               <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -237,17 +258,26 @@ export function TradeCalculator({
             <Button type="submit" size="sm" className="font-mono tracking-widest">
               LOAD
             </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setChartsOpen(true)}
+              className="font-mono tracking-widest"
+            >
+              CHART{chartCount > 0 ? ` ${chartCount}` : ""}
+            </Button>
           </form>
         </div>
         <button
           type="button"
           onClick={() => setOpen((prev) => !prev)}
           aria-expanded={open}
-          aria-label={open ? "Collapse calculator" : "Expand calculator"}
-          className="mt-5 flex size-8 shrink-0 items-center justify-center rounded-lg border border-white/10 text-muted-foreground hover:text-foreground"
+          className="mt-5 inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-white/35 bg-white/10 px-2.5 py-1.5 font-mono text-[10px] font-bold tracking-[0.22em] text-white shadow-[0_0_16px_rgb(255_255_255_/_18%)] transition hover:border-white hover:bg-white hover:text-black"
         >
+          {open ? "CLOSE DETAILS" : "OPEN DETAILS"}
           <ChevronRight
-            className={`size-4 transition-transform ${open ? "rotate-90" : ""}`}
+            className={`size-3.5 transition-transform ${open ? "rotate-90" : ""}`}
           />
         </button>
       </div>
@@ -347,7 +377,12 @@ export function TradeCalculator({
           <div className="grid grid-cols-2 gap-1">
             <button
               type="button"
-              onClick={() => onChange({ side: "long" })}
+              onClick={() =>
+                onChange({
+                  side: "long",
+                  ...levelsForSide("long", input.stop, input.target),
+                })
+              }
               className={`h-8 rounded-lg font-mono text-[10px] tracking-widest ${
                 input.side === "long"
                   ? "bg-[#b6ff3b] text-[#0b1204]"
@@ -358,7 +393,12 @@ export function TradeCalculator({
             </button>
             <button
               type="button"
-              onClick={() => onChange({ side: "short" })}
+              onClick={() =>
+                onChange({
+                  side: "short",
+                  ...levelsForSide("short", input.stop, input.target),
+                })
+              }
               className={`h-8 rounded-lg font-mono text-[10px] tracking-widest ${
                 input.side === "short"
                   ? "bg-[#ff3b5c] text-[#1a0508]"
@@ -453,7 +493,7 @@ export function TradeCalculator({
             onChange={(event) =>
               onChange({ stop: readNumber(event.target.value) })
             }
-            className="border-white/10 bg-black/40 font-mono"
+            className="border-[#ff3b5c]/40 bg-[#ff3b5c]/10 font-mono text-[#ff3b5c] caret-[#ff3b5c] focus-visible:border-[#ff3b5c] focus-visible:ring-[#ff3b5c]/40"
           />
         </Field>
         <Field label={options ? "TARGET PREM" : "TARGET"}>
@@ -468,7 +508,7 @@ export function TradeCalculator({
             onChange={(event) =>
               onChange({ target: readNumber(event.target.value) })
             }
-            className="border-white/10 bg-black/40 font-mono"
+            className="border-[#b6ff3b]/40 bg-[#b6ff3b]/10 font-mono text-[#b6ff3b] caret-[#b6ff3b] focus-visible:border-[#b6ff3b] focus-visible:ring-[#b6ff3b]/40"
           />
         </Field>
       </div>
@@ -518,8 +558,8 @@ export function TradeCalculator({
           danger={marginBlocked}
         />
         <Stat
-          label={options ? "PREMIUM" : "NOTIONAL"}
-          value={money(result.notional, input.accountCurrency)}
+          label={`${pip}S`}
+          value={qty(ticksAmount, 1)}
         />
         <Stat
           label={
@@ -617,6 +657,12 @@ export function TradeCalculator({
           />
         </button>
       )}
+      <ChartGallery
+        open={chartsOpen}
+        onOpenChange={setChartsOpen}
+        tradeId={tradeId}
+        ticker={ticker}
+      />
     </section>
   );
 }

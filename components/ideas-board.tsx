@@ -33,17 +33,28 @@ import { useDesk } from "@/hooks/use-desk";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { cn } from "@/lib/utils";
 import type { TfSide } from "@/lib/types";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export function IdeasBoard() {
   const hydrated = useHydrated();
   const { trades } = useDesk();
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [ticker, setTicker] = useState("");
-  const [note, setNote] = useState("");
   const [view, setView] = useState<CalendarView>("month");
   const [cursor, setCursor] = useState(() => new Date());
   const [selected, setSelected] = useState("");
   const [overlayOpen, setOverlayOpen] = useState(false);
+  const [listOpen, setListOpen] = useState(false);
+  const [plannerOpen, setPlannerOpen] = useState(false);
+  const [draftTicker, setDraftTicker] = useState("");
+  const [draftBias, setDraftBias] = useState<TfSide>("bullish");
+  const [draftNote, setDraftNote] = useState("");
 
   useEffect(() => {
     if (!hydrated) return;
@@ -111,34 +122,60 @@ export function IdeasBoard() {
     setOverlayOpen(true);
   }
 
-  function submit(event: FormEvent) {
-    event.preventDefault();
-    const symbol = ticker.trim().toUpperCase();
-    const body = note.trim();
-    if (!symbol && !body) return;
+  function addPlan(symbol: string, body: string, bias: TfSide) {
     write([
       {
         id: crypto.randomUUID(),
         ticker: symbol,
         note: body,
+        bias,
         createdAt: Date.now(),
         plannedFor: selected || dateKey(new Date()),
       },
       ...ideas,
     ]);
+  }
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    const symbol = ticker.trim().toUpperCase();
+    if (!symbol) return;
+    setDraftTicker(symbol);
+    setDraftBias("bullish");
+    setDraftNote("");
+    setPlannerOpen(true);
+  }
+
+  function confirmPlan() {
+    const symbol = draftTicker.trim().toUpperCase();
+    if (!symbol) return;
+    addPlan(symbol, draftNote.trim(), draftBias);
     setTicker("");
-    setNote("");
+    setDraftNote("");
+    setPlannerOpen(false);
   }
 
   function remove(id: string) {
     write(ideas.filter((item) => item.id !== id));
   }
 
-  function patchNote(id: string, note: string) {
+  function patchPlan(
+    id: string,
+    next: Partial<Pick<Idea, "ticker" | "note" | "bias">>,
+  ) {
     write(
-      ideas.map((item) =>
-        item.id === id ? { ...item, note: note.trim() } : item,
-      ),
+      ideas.map((item) => {
+        if (item.id !== id) return item;
+        return {
+          ...item,
+          ticker:
+            next.ticker !== undefined
+              ? next.ticker.trim().toUpperCase()
+              : item.ticker,
+          note: next.note !== undefined ? next.note.trim() : item.note,
+          bias: next.bias !== undefined ? next.bias : item.bias,
+        };
+      }),
     );
   }
 
@@ -165,7 +202,7 @@ export function IdeasBoard() {
         <main className="mx-auto flex w-full max-w-[1200px] flex-1 flex-col gap-6 p-4 pb-10">
           <div>
             <h2 className="text-5xl font-black tracking-tight sm:text-6xl">
-              Calendar
+              Ideas
             </h2>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
               Plan tickers by day, week, or month. Park the setup on a date,
@@ -180,6 +217,7 @@ export function IdeasBoard() {
                   key={item}
                   type="button"
                   onClick={() => {
+                    setListOpen(false);
                     setView(item);
                     if (item === "day" && selected) {
                       setCursor(parseDateKey(selected));
@@ -187,7 +225,7 @@ export function IdeasBoard() {
                   }}
                   className={cn(
                     "rounded-md px-3 py-1.5 font-mono text-[10px] tracking-widest transition",
-                    view === item
+                    view === item && !listOpen
                       ? "bg-gold text-primary-foreground"
                       : "text-muted-foreground hover:text-foreground",
                   )}
@@ -195,6 +233,18 @@ export function IdeasBoard() {
                   {item.toUpperCase()}
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={() => setListOpen(true)}
+                className={cn(
+                  "rounded-md px-3 py-1.5 font-mono text-[10px] tracking-widest transition",
+                  listOpen
+                    ? "bg-gold text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                LIST
+              </button>
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -229,7 +279,7 @@ export function IdeasBoard() {
 
           <form
             onSubmit={submit}
-            className="grid gap-2 rounded-2xl border border-white/8 bg-black/35 p-4 sm:grid-cols-[8rem_1fr_auto]"
+            className="grid gap-2 rounded-2xl border border-white/8 bg-black/35 p-4 sm:grid-cols-[1fr_auto]"
           >
             <Input
               value={ticker}
@@ -238,16 +288,9 @@ export function IdeasBoard() {
               aria-label="Plan ticker"
               className="border-white/10 bg-black/40 font-mono tracking-[0.28em] uppercase"
             />
-            <Input
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              placeholder={`Setup for ${selected ? formatDayLabel(parseDateKey(selected)) : "today"}…`}
-              aria-label="Plan note"
-              className="border-white/10 bg-black/40"
-            />
             <Button type="submit" className="font-mono tracking-widest">
               <Plus className="size-3.5" />
-              Plan
+              Plan trade
             </Button>
           </form>
 
@@ -283,7 +326,7 @@ export function IdeasBoard() {
               plans={selectedPlans}
               trades={dayTrades}
               onRemove={remove}
-              onNote={patchNote}
+              onPatch={patchPlan}
             />
           )}
 
@@ -293,20 +336,32 @@ export function IdeasBoard() {
             date={selectedDate}
             plans={selectedPlans}
             trades={dayTrades}
-            onAdd={(symbol, body) => {
-              write([
-                {
-                  id: crypto.randomUUID(),
-                  ticker: symbol,
-                  note: body,
-                  createdAt: Date.now(),
-                  plannedFor: selected || dateKey(new Date()),
-                },
-                ...ideas,
-              ]);
-            }}
+            onAdd={(symbol, body, bias) => addPlan(symbol, body, bias)}
             onRemove={remove}
-            onNote={patchNote}
+            onPatch={patchPlan}
+          />
+
+          <PlanTradeDialog
+            open={plannerOpen}
+            ticker={draftTicker}
+            bias={draftBias}
+            note={draftNote}
+            dateLabel={
+              selected ? formatDayLabel(parseDateKey(selected)) : "today"
+            }
+            onBias={setDraftBias}
+            onNote={setDraftNote}
+            onOpenChange={setPlannerOpen}
+            onConfirm={confirmPlan}
+          />
+
+          <IdeasListOverlay
+            open={listOpen}
+            onOpenChange={setListOpen}
+            byDate={byDate}
+            tradesByDate={tradesByDate}
+            onRemove={remove}
+            onPatch={patchPlan}
           />
         </main>
       </div>
@@ -344,6 +399,444 @@ const SENTIMENT_TONE: Record<
   },
 };
 
+type PlanPatch = Partial<Pick<Idea, "ticker" | "note" | "bias">>;
+
+function BiasToggle({
+  value,
+  onChange,
+}: {
+  value: TfSide;
+  onChange: (bias: TfSide) => void;
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Plan bias"
+      className="grid grid-cols-3 rounded-lg border border-white/10 bg-black/40 p-0.5"
+    >
+      {(["bullish", "range", "bearish"] as const).map((side) => {
+        const tone = SENTIMENT_TONE[side];
+        const active = value === side;
+        return (
+          <button
+            key={side}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            onClick={() => onChange(side)}
+            className={cn(
+              "rounded-md px-3 py-2 font-mono text-[10px] tracking-widest transition",
+              !active && "text-muted-foreground hover:text-foreground",
+            )}
+            style={
+              active
+                ? { background: tone.dim, color: tone.color }
+                : undefined
+            }
+          >
+            {tone.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function PlanTradeDialog({
+  open,
+  ticker,
+  bias,
+  note,
+  dateLabel,
+  onBias,
+  onNote,
+  onOpenChange,
+  onConfirm,
+}: {
+  open: boolean;
+  ticker: string;
+  bias: TfSide;
+  note: string;
+  dateLabel: string;
+  onBias: (bias: TfSide) => void;
+  onNote: (note: string) => void;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: () => void;
+}) {
+  const tone = SENTIMENT_TONE[bias];
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <p className="font-mono text-[10px] tracking-[0.35em] text-muted-foreground">
+            PLAN TRADE
+          </p>
+          <DialogTitle className="font-mono text-2xl font-bold tracking-[0.16em]">
+            {ticker}
+          </DialogTitle>
+          <DialogDescription>
+            Lock bias and a note for {dateLabel}.
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          className="flex flex-col gap-3 px-4 pb-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onConfirm();
+          }}
+        >
+          <BiasToggle value={bias} onChange={onBias} />
+          <textarea
+            value={note}
+            onChange={(event) => onNote(event.target.value)}
+            placeholder="Setup notes…"
+            rows={4}
+            aria-label="Plan notes"
+            className="w-full resize-none rounded-lg border border-white/10 bg-black/40 px-2.5 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-gold/40"
+          />
+          <Button
+            type="submit"
+            className="font-mono tracking-widest"
+            style={{ background: tone.color, color: "#0b1204" }}
+          >
+            <Plus className="size-3.5" />
+            Plan {tone.side}
+          </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+type ListFocus =
+  | { kind: "day"; key: string }
+  | { kind: "plan"; id: string }
+  | { kind: "trade"; id: string }
+  | null;
+
+const LIST_PAGE_SIZE = 8;
+
+type ListTicket =
+  | { key: string; kind: "trade"; trade: ScoredTrade }
+  | { key: string; kind: "plan"; plan: Idea };
+
+function IdeasListOverlay({
+  open,
+  onOpenChange,
+  byDate,
+  tradesByDate,
+  onRemove,
+  onPatch,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  byDate: Map<string, Idea[]>;
+  tradesByDate: Map<string, ScoredTrade[]>;
+  onRemove: (id: string) => void;
+  onPatch: (id: string, next: PlanPatch) => void;
+}) {
+  const [focus, setFocus] = useState<ListFocus>(null);
+  const [page, setPage] = useState(0);
+
+  useEffect(() => {
+    if (!open) {
+      setFocus(null);
+      setPage(0);
+    }
+  }, [open]);
+
+  const groups = useMemo(() => {
+    const keys = new Set([...byDate.keys(), ...tradesByDate.keys()]);
+    return [...keys]
+      .sort((a, b) => b.localeCompare(a))
+      .map((key) => ({
+        key,
+        plans: byDate.get(key) ?? [],
+        trades: tradesByDate.get(key) ?? [],
+      }))
+      .filter((group) => group.plans.length + group.trades.length > 0);
+  }, [byDate, tradesByDate]);
+
+  const tickets = useMemo<ListTicket[]>(
+    () =>
+      groups.flatMap((group) => [
+        ...group.trades.map((trade) => ({
+          key: group.key,
+          kind: "trade" as const,
+          trade,
+        })),
+        ...group.plans.map((plan) => ({
+          key: group.key,
+          kind: "plan" as const,
+          plan,
+        })),
+      ]),
+    [groups],
+  );
+
+  const pageCount = Math.max(1, Math.ceil(tickets.length / LIST_PAGE_SIZE));
+  const safePage = Math.min(page, pageCount - 1);
+
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage]);
+
+  const pageGroups = useMemo(() => {
+    const slice = tickets.slice(
+      safePage * LIST_PAGE_SIZE,
+      (safePage + 1) * LIST_PAGE_SIZE,
+    );
+    const rows: { key: string; trades: ScoredTrade[]; plans: Idea[] }[] = [];
+    for (const item of slice) {
+      let group = rows.find((row) => row.key === item.key);
+      if (!group) {
+        group = { key: item.key, trades: [], plans: [] };
+        rows.push(group);
+      }
+      if (item.kind === "trade") group.trades.push(item.trade);
+      else group.plans.push(item.plan);
+    }
+    return rows;
+  }, [tickets, safePage]);
+
+  const planLookup = useMemo(() => {
+    const map = new Map<string, Idea>();
+    for (const rows of byDate.values()) {
+      for (const plan of rows) map.set(plan.id, plan);
+    }
+    return map;
+  }, [byDate]);
+
+  const tradeLookup = useMemo(() => {
+    const map = new Map<string, ScoredTrade>();
+    for (const rows of tradesByDate.values()) {
+      for (const trade of rows) map.set(trade.id, trade);
+    }
+    return map;
+  }, [tradesByDate]);
+
+  const focusedPlan = focus?.kind === "plan" ? (planLookup.get(focus.id) ?? null) : null;
+  const focusedTrade =
+    focus?.kind === "trade" ? (tradeLookup.get(focus.id) ?? null) : null;
+  const focusedDay =
+    focus?.kind === "day"
+      ? groups.find((group) => group.key === focus.key) ?? null
+      : null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[min(85vh,42rem)] max-w-3xl overflow-hidden">
+        <DialogHeader>
+          <p className="font-mono text-[10px] tracking-[0.35em] text-muted-foreground">
+            IDEAS LIST
+          </p>
+          <DialogTitle>By date</DialogTitle>
+          <DialogDescription>
+            Open a date, idea, or live ticket for the full setup.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid min-h-0 flex-1 gap-0 border-t border-white/8 md:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
+          <div className="flex max-h-[min(60vh,32rem)] min-h-0 flex-col border-b border-white/8 md:border-r md:border-b-0">
+            <div className="min-h-0 flex-1 overflow-y-auto p-3">
+            {tickets.length === 0 ? (
+              <p className="px-1 py-8 font-mono text-[10px] tracking-widest text-muted-foreground">
+                NO PLANS OR TRADES
+              </p>
+            ) : (
+              <ul className="space-y-4">
+                {pageGroups.map((group) => {
+                  const active = focus?.kind === "day" && focus.key === group.key;
+                  const full = groups.find((row) => row.key === group.key);
+                  const planCount = full?.plans.length ?? group.plans.length;
+                  const tradeCount = full?.trades.length ?? group.trades.length;
+                  return (
+                    <li key={group.key}>
+                      <button
+                        type="button"
+                        onClick={() => setFocus({ kind: "day", key: group.key })}
+                        className={cn(
+                          "flex w-full items-baseline justify-between gap-2 rounded-md px-1.5 py-1 text-left font-mono text-[10px] tracking-widest transition",
+                          active
+                            ? "bg-gold/15 text-gold"
+                            : "text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        <span>{formatDayLabel(parseDateKey(group.key))}</span>
+                        <span>
+                          {planCount} PLAN
+                          {planCount === 1 ? "" : "S"}
+                          <span className="mx-1.5 text-white/20">·</span>
+                          {tradeCount} TRADE
+                          {tradeCount === 1 ? "" : "S"}
+                        </span>
+                      </button>
+                      <ul className="mt-1.5 space-y-1">
+                        {group.trades.map((trade) => {
+                          const side = tradeSentiment(trade);
+                          const tone = SENTIMENT_TONE[side];
+                          const selected =
+                            focus?.kind === "trade" && focus.id === trade.id;
+                          return (
+                            <li key={trade.id}>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setFocus({ kind: "trade", id: trade.id })
+                                }
+                                className={cn(
+                                  "flex w-full items-center justify-between gap-2 rounded-lg border px-2.5 py-2 text-left transition",
+                                  selected
+                                    ? "border-gold/40 bg-gold/10"
+                                    : "border-white/8 bg-black/30 hover:border-white/20",
+                                )}
+                              >
+                                <span className="font-mono text-sm tracking-widest">
+                                  {trade.ticker || "UNTITLED"}
+                                </span>
+                                <span
+                                  className="font-mono text-[10px] tracking-widest"
+                                  style={{ color: tone.color }}
+                                >
+                                  {tone.side}
+                                </span>
+                              </button>
+                            </li>
+                          );
+                        })}
+                        {group.plans.map((plan) => {
+                          const tone = plan.bias
+                            ? SENTIMENT_TONE[plan.bias]
+                            : null;
+                          const selected =
+                            focus?.kind === "plan" && focus.id === plan.id;
+                          return (
+                            <li key={plan.id}>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setFocus({ kind: "plan", id: plan.id })
+                                }
+                                className={cn(
+                                  "flex w-full items-center justify-between gap-2 rounded-lg border px-2.5 py-2 text-left transition",
+                                  selected
+                                    ? "border-gold/40 bg-gold/10"
+                                    : "border-white/8 bg-black/30 hover:border-white/20",
+                                )}
+                              >
+                                <span className="font-mono text-sm tracking-widest">
+                                  {plan.ticker || "NOTE"}
+                                </span>
+                                <span
+                                  className="font-mono text-[10px] tracking-widest"
+                                  style={{
+                                    color: tone ? tone.color : "var(--gold)",
+                                  }}
+                                >
+                                  {tone ? tone.label : "PLAN"}
+                                </span>
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            </div>
+            {tickets.length > LIST_PAGE_SIZE ? (
+              <div className="flex shrink-0 items-center justify-between gap-2 border-t border-white/8 px-3 py-2">
+                <button
+                  type="button"
+                  onClick={() => setPage((current) => Math.max(0, current - 1))}
+                  disabled={safePage === 0}
+                  aria-label="Previous page"
+                  className="rounded-md p-1 text-muted-foreground transition hover:text-foreground disabled:opacity-30"
+                >
+                  <ChevronLeft className="size-4" />
+                </button>
+                <p className="font-mono text-[10px] tracking-widest text-muted-foreground">
+                  {safePage + 1} / {pageCount}
+                </p>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPage((current) => Math.min(pageCount - 1, current + 1))
+                  }
+                  disabled={safePage >= pageCount - 1}
+                  aria-label="Next page"
+                  className="rounded-md p-1 text-muted-foreground transition hover:text-foreground disabled:opacity-30"
+                >
+                  <ChevronRight className="size-4" />
+                </button>
+              </div>
+            ) : null}
+          </div>
+          <div className="max-h-[min(60vh,32rem)] overflow-y-auto p-4">
+            {focusedTrade ? (
+              <TradeListDetail trade={focusedTrade} />
+            ) : focusedPlan ? (
+              <ul>
+                <PlanCard
+                  plan={focusedPlan}
+                  onRemove={(id) => {
+                    onRemove(id);
+                    setFocus(null);
+                  }}
+                  onPatch={onPatch}
+                />
+              </ul>
+            ) : focusedDay ? (
+              <DayLists
+                plans={focusedDay.plans}
+                trades={focusedDay.trades}
+                onRemove={onRemove}
+                onPatch={onPatch}
+              />
+            ) : (
+              <p className="font-mono text-[10px] tracking-widest text-muted-foreground">
+                SELECT A DATE OR TICKET
+              </p>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function TradeListDetail({ trade }: { trade: ScoredTrade }) {
+  const side = tradeSentiment(trade);
+  const tone = SENTIMENT_TONE[side];
+  return (
+    <div className="rounded-xl border border-white/8 bg-black/40 p-3">
+      <p
+        className="font-mono text-[10px] tracking-[0.35em]"
+        style={{ color: tone.color }}
+      >
+        {tone.label} · {tone.side}
+      </p>
+      <h4 className="mt-1 font-mono text-xl font-bold tracking-[0.16em]">
+        {trade.ticker || "UNTITLED"}
+      </h4>
+      <p className="mt-2 font-mono text-[10px] tracking-widest text-muted-foreground">
+        {trade.result.band.toUpperCase()}
+        <span className="mx-1.5 text-white/20">·</span>
+        {formatScore(trade.result.score)}
+        <span className="mx-1.5 text-white/20">·</span>
+        {trade.result.grade}
+      </p>
+      <Link
+        href={`/trade/${trade.id}`}
+        className="mt-3 inline-flex rounded-md border border-gold/40 bg-gold/10 px-2 py-1 font-mono text-[10px] tracking-widest text-gold transition hover:bg-gold hover:text-primary-foreground"
+      >
+        OPEN TRADE
+      </Link>
+    </div>
+  );
+}
+
 function dayChips(
   key: string,
   plans: Idea[],
@@ -373,6 +866,7 @@ function dayChips(
       id: `p-${plan.id}`,
       ticker: plan.ticker || "NOTE",
       active: Boolean(plan.ticker && activeTickers.has(plan.ticker)),
+      side: plan.bias ?? undefined,
     });
   }
   return chips;
@@ -388,7 +882,7 @@ function ActiveBiasMeter({ trades }: { trades: ScoredTrade[] }) {
       const side = tradeSentiment(trade);
       if (side === "bullish") long += 1;
       else if (side === "bearish") short += 1;
-      else range += 1;
+      else if (side === "range") range += 1;
       ticks.push({
         id: trade.id,
         ticker: trade.ticker || "UNTITLED",
@@ -396,6 +890,7 @@ function ActiveBiasMeter({ trades }: { trades: ScoredTrade[] }) {
       });
     }
     const total = trades.length;
+    const even = total - long - short - range;
     const needle =
       total === 0 ? 50 : ((long - short) / total) * 50 + 50;
     let lead: TfSide | "even" = "even";
@@ -403,14 +898,16 @@ function ActiveBiasMeter({ trades }: { trades: ScoredTrade[] }) {
     else if (short > long && short >= range) lead = "bearish";
     else if (range > long && range > short) lead = "range";
     else if (total > 0 && long === short) lead = range > 0 ? "range" : "even";
-    return { long, short, range, total, needle, lead, ticks };
+    return { long, short, range, even, total, needle, lead, ticks };
   }, [trades]);
 
   const tone = SENTIMENT_TONE[stats.lead];
   const valueText =
     stats.total === 0
       ? "No open trades"
-      : `${stats.long} long, ${stats.range} range, ${stats.short} short`;
+      : stats.even > 0
+        ? `${stats.long} long, ${stats.range} range, ${stats.short} short, ${stats.even} flat`
+        : `${stats.long} long, ${stats.range} range, ${stats.short} short`;
 
   return (
     <div className="border-b border-white/8 px-4 py-3">
@@ -606,6 +1103,9 @@ function MonthView({
                       }
                     >
                       {chip.ticker}
+                      {tone ? (
+                        <span className="ml-1 opacity-80">· {tone.label}</span>
+                      ) : null}
                     </span>
                   );
                 })}
@@ -707,6 +1207,7 @@ function WeekView({
                   ))}
                   {plans.map((plan) => {
                     const active = Boolean(plan.ticker && activeTickers.has(plan.ticker));
+                    const tone = plan.bias ? SENTIMENT_TONE[plan.bias] : null;
                     return (
                       <li
                         key={plan.id}
@@ -719,12 +1220,19 @@ function WeekView({
                       >
                         <div className="flex items-start justify-between gap-1">
                           <p
-                            className={cn(
-                              "font-mono text-[10px] tracking-widest",
-                              active ? "text-[#b6ff3b]" : "text-gold",
-                            )}
+                            className="font-mono text-[10px] tracking-widest"
+                            style={{
+                              color: tone
+                                ? tone.color
+                                : active
+                                  ? "#b6ff3b"
+                                  : "var(--gold)",
+                            }}
                           >
                             {plan.ticker || "NOTE"}
+                            {tone ? (
+                              <span className="ml-1 opacity-80">· {tone.label}</span>
+                            ) : null}
                           </p>
                           <button
                             type="button"
@@ -758,13 +1266,13 @@ function DayView({
   plans,
   trades,
   onRemove,
-  onNote,
+  onPatch,
 }: {
   date: Date;
   plans: Idea[];
   trades: ScoredTrade[];
   onRemove: (id: string) => void;
-  onNote: (id: string, note: string) => void;
+  onPatch: (id: string, next: PlanPatch) => void;
 }) {
   return (
     <section className="rounded-2xl border border-white/8 bg-black/35 p-5">
@@ -786,7 +1294,7 @@ function DayView({
             plans={plans}
             trades={trades}
             onRemove={onRemove}
-            onNote={onNote}
+            onPatch={onPatch}
           />
         </div>
       )}
@@ -802,91 +1310,105 @@ function DayOverlay({
   trades,
   onAdd,
   onRemove,
-  onNote,
+  onPatch,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   date: Date;
   plans: Idea[];
   trades: ScoredTrade[];
-  onAdd: (ticker: string, note: string) => void;
+  onAdd: (ticker: string, note: string, bias: TfSide) => void;
   onRemove: (id: string) => void;
-  onNote: (id: string, note: string) => void;
+  onPatch: (id: string, next: PlanPatch) => void;
 }) {
   const [ticker, setTicker] = useState("");
   const [note, setNote] = useState("");
+  const [bias, setBias] = useState<TfSide>("bullish");
 
   useEffect(() => {
     if (!open) return;
     setTicker("");
     setNote("");
+    setBias("bullish");
   }, [open, date]);
 
   function submit(event: FormEvent) {
     event.preventDefault();
     const symbol = ticker.trim().toUpperCase();
-    const body = note.trim();
-    if (!symbol && !body) return;
-    onAdd(symbol, body);
+    if (!symbol) return;
+    onAdd(symbol, note.trim(), bias);
     setTicker("");
     setNote("");
+    setBias("bullish");
   }
 
   const count = plans.length + trades.length;
+  const tone = SENTIMENT_TONE[bias];
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="border-white/8 bg-[#0c0e14] sm:max-w-md"
+        className="gap-0 border-white/8 bg-[#0c0e14] p-0 sm:max-w-md"
       >
-        <SheetHeader className="border-b border-white/8">
+        <SheetHeader className="border-b border-white/8 px-5 py-4 pr-12">
           <p className="font-mono text-[10px] tracking-[0.35em] text-muted-foreground">
             SESSION
           </p>
-          <SheetTitle className="text-lg">{formatDayLabel(date)}</SheetTitle>
-          <SheetDescription>
+          <SheetTitle className="font-mono text-xl font-semibold tracking-tight">
+            {formatDayLabel(date)}
+          </SheetTitle>
+          <SheetDescription className="font-mono text-[10px] tracking-widest">
             {count === 0
-              ? "No plans or trades on this date."
-              : `${plans.length} planned · ${trades.length} in the book`}
+              ? "EMPTY"
+              : `${plans.length} PLAN · ${trades.length} LIVE`}
           </SheetDescription>
         </SheetHeader>
 
-        <form onSubmit={submit} className="flex flex-col gap-2 px-4">
-          <Input
-            value={ticker}
-            onChange={(event) => setTicker(event.target.value.toUpperCase())}
-            placeholder="TICKER"
-            aria-label="Plan ticker"
-            className="border-white/10 bg-black/40 font-mono tracking-[0.28em] uppercase"
-          />
-          <Input
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-            placeholder="Setup note…"
-            aria-label="Plan note"
-            className="border-white/10 bg-black/40"
-          />
-          <Button type="submit" className="font-mono tracking-widest">
-            <Plus className="size-3.5" />
-            Plan this day
-          </Button>
-        </form>
-
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
           {count === 0 ? (
-            <p className="rounded-xl border border-dashed border-white/12 bg-black/25 px-4 py-8 text-sm text-muted-foreground">
-              Park a ticker on this date, or open a trade from the desk.
+            <p className="font-mono text-[10px] tracking-widest text-muted-foreground">
+              NO TICKETS ON THIS DAY
             </p>
           ) : (
             <DayLists
               plans={plans}
               trades={trades}
               onRemove={onRemove}
-              onNote={onNote}
+              onPatch={onPatch}
             />
           )}
         </div>
+
+        <form
+          onSubmit={submit}
+          className="shrink-0 space-y-2 border-t border-white/8 bg-black/25 p-4"
+        >
+          <div className="flex gap-2">
+            <Input
+              value={ticker}
+              onChange={(event) => setTicker(event.target.value.toUpperCase())}
+              placeholder="TICKER"
+              aria-label="Plan ticker"
+              className="h-9 border-white/10 bg-black/40 font-mono tracking-[0.28em] uppercase"
+            />
+            <Button
+              type="submit"
+              className="h-9 shrink-0 font-mono tracking-widest"
+              style={{ background: tone.color, color: "#0b1204" }}
+            >
+              PLAN
+            </Button>
+          </div>
+          <BiasToggle value={bias} onChange={setBias} />
+          <Input
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            placeholder="Note (optional)"
+            aria-label="Plan notes"
+            className="h-9 border-white/10 bg-black/40"
+          />
+        </form>
       </SheetContent>
     </Sheet>
   );
@@ -896,58 +1418,69 @@ function DayLists({
   plans,
   trades,
   onRemove,
-  onNote,
+  onPatch,
 }: {
   plans: Idea[];
   trades: ScoredTrade[];
   onRemove: (id: string) => void;
-  onNote: (id: string, note: string) => void;
+  onPatch: (id: string, next: PlanPatch) => void;
 }) {
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {trades.length > 0 ? (
-        <section className="space-y-2">
-          <p className="font-mono text-[10px] tracking-[0.35em] text-muted-foreground">
-            TRADES
-            <span className="ml-2 text-foreground/50">{trades.length}</span>
+        <section className="space-y-1.5">
+          <p className="px-0.5 font-mono text-[10px] tracking-[0.28em] text-muted-foreground">
+            LIVE
           </p>
-          <ul className="space-y-2">
-            {trades.map((trade) => (
-              <li key={trade.id}>
-                <Link
-                  href={`/trade/${trade.id}`}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-white/8 bg-black/40 p-3 transition hover:border-gold/30"
-                >
-                  <div>
-                    <p className="font-mono text-[10px] tracking-[0.28em] text-muted-foreground">
-                      {trade.bias === "bullish" ? "LONG" : "SHORT"}
-                    </p>
-                    <p className="mt-0.5 font-mono text-lg font-bold tracking-[0.16em]">
-                      {trade.ticker || "UNTITLED"}
-                    </p>
-                  </div>
-                  <span className="font-mono text-[10px] tracking-widest text-gold">
-                    {trade.result.band.toUpperCase()} · {formatScore(trade.result.score)}
-                  </span>
-                </Link>
-              </li>
-            ))}
+          <ul className="space-y-1.5">
+            {trades.map((trade) => {
+              const side = tradeSentiment(trade);
+              const tone = SENTIMENT_TONE[side];
+              return (
+                <li key={trade.id}>
+                  <Link
+                    href={`/trade/${trade.id}`}
+                    className="flex items-center gap-3 rounded-xl border border-white/8 bg-black/30 px-3 py-2.5 transition hover:border-gold/35"
+                  >
+                    <span
+                      className="h-8 w-0.5 shrink-0 rounded-full"
+                      style={{ background: tone.color }}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-mono text-sm font-bold tracking-[0.16em]">
+                        {trade.ticker || "UNTITLED"}
+                      </p>
+                      <p className="mt-0.5 font-mono text-[10px] tracking-widest text-muted-foreground">
+                        {trade.result.band.toUpperCase()}
+                        <span className="mx-1 text-white/20">·</span>
+                        {formatScore(trade.result.score)}
+                      </p>
+                    </div>
+                    <span
+                      className="shrink-0 font-mono text-[10px] tracking-widest"
+                      style={{ color: tone.color }}
+                    >
+                      {tone.side}
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         </section>
       ) : null}
       {plans.length > 0 ? (
-        <section className="space-y-2">
-          <p className="font-mono text-[10px] tracking-[0.35em] text-muted-foreground">
+        <section className="space-y-1.5">
+          <p className="px-0.5 font-mono text-[10px] tracking-[0.28em] text-muted-foreground">
             PLANS
-            <span className="ml-2 text-foreground/50">{plans.length}</span>
           </p>
-          <ul className="space-y-2">
+          <ul className="space-y-1.5">
             {plans.map((plan) => (
               <PlanCard
                 key={plan.id}
                 plan={plan}
                 onRemove={onRemove}
-                onNote={onNote}
+                onPatch={onPatch}
               />
             ))}
           </ul>
@@ -960,63 +1493,155 @@ function DayLists({
 function PlanCard({
   plan,
   onRemove,
-  onNote,
+  onPatch,
 }: {
   plan: Idea;
   onRemove: (id: string) => void;
-  onNote: (id: string, note: string) => void;
+  onPatch: (id: string, next: PlanPatch) => void;
 }) {
   const href = plan.ticker
     ? `/trade/new?ticker=${encodeURIComponent(plan.ticker)}`
     : "/trade/new";
-  const [draft, setDraft] = useState(plan.note);
+  const [editing, setEditing] = useState(false);
+  const [ticker, setTicker] = useState(plan.ticker);
+  const [note, setNote] = useState(plan.note);
+  const [bias, setBias] = useState<TfSide>(plan.bias ?? "bullish");
 
   useEffect(() => {
-    setDraft(plan.note);
-  }, [plan.note]);
+    if (editing) return;
+    setTicker(plan.ticker);
+    setNote(plan.note);
+    setBias(plan.bias ?? "bullish");
+  }, [editing, plan.ticker, plan.note, plan.bias]);
 
-  function saveNote() {
-    if (draft.trim() === plan.note) return;
-    onNote(plan.id, draft);
+  function beginEdit() {
+    setTicker(plan.ticker);
+    setNote(plan.note);
+    setBias(plan.bias ?? "bullish");
+    setEditing(true);
+  }
+
+  function save() {
+    const symbol = ticker.trim().toUpperCase();
+    onPatch(plan.id, {
+      ticker: symbol || plan.ticker,
+      note: note.trim(),
+      bias,
+    });
+    setEditing(false);
+  }
+
+  function cancel() {
+    setTicker(plan.ticker);
+    setNote(plan.note);
+    setBias(plan.bias ?? "bullish");
+    setEditing(false);
+  }
+
+  const tone = plan.bias ? SENTIMENT_TONE[plan.bias] : null;
+
+  if (editing) {
+    return (
+      <li className="rounded-xl border border-gold/30 bg-black/40 px-3 py-2.5">
+        <form
+          className="space-y-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            save();
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <Input
+              value={ticker}
+              onChange={(event) => setTicker(event.target.value.toUpperCase())}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  cancel();
+                }
+              }}
+              placeholder="TICKER"
+              aria-label="Plan ticker"
+              autoFocus
+              className="h-8 border-white/10 bg-black/40 font-mono text-sm tracking-[0.16em] uppercase"
+            />
+            <button
+              type="submit"
+              className="shrink-0 rounded-md px-2 py-1 font-mono text-[10px] tracking-widest text-gold transition hover:bg-gold/15"
+            >
+              DONE
+            </button>
+            <button
+              type="button"
+              onClick={() => onRemove(plan.id)}
+              aria-label={`Delete ${plan.ticker || "note"}`}
+              className="shrink-0 rounded-md p-1 text-muted-foreground transition hover:text-destructive"
+            >
+              <Trash2 className="size-3.5" />
+            </button>
+          </div>
+          <BiasToggle value={bias} onChange={setBias} />
+          <textarea
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                cancel();
+              }
+            }}
+            placeholder="Setup notes…"
+            rows={3}
+            aria-label="Plan notes"
+            className="w-full resize-none rounded-lg border border-white/10 bg-black/40 px-2.5 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-gold/40"
+          />
+        </form>
+      </li>
+    );
   }
 
   return (
-    <li className="rounded-xl border border-white/8 bg-black/40 p-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="font-mono text-[10px] tracking-[0.35em] text-muted-foreground">
-            PLAN
-          </p>
-          <h4 className="mt-1 font-mono text-xl font-bold tracking-[0.16em]">
-            {plan.ticker || "NOTE"}
-          </h4>
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
-          <Link
-            href={href}
-            className="rounded-md border border-gold/40 bg-gold/10 px-2 py-1 font-mono text-[10px] tracking-widest text-gold transition hover:bg-gold hover:text-primary-foreground"
+    <li className="rounded-xl border border-white/8 bg-black/30 px-3 py-2.5">
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={beginEdit}
+          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+        >
+          <span
+            className="h-8 w-0.5 shrink-0 rounded-full"
+            style={{ background: tone ? tone.color : "var(--gold)" }}
+          />
+          <span className="min-w-0 flex-1">
+            <span className="block font-mono text-sm font-bold tracking-[0.16em]">
+              {plan.ticker || "NOTE"}
+            </span>
+            <span className="mt-0.5 block truncate font-mono text-[10px] tracking-widest text-muted-foreground">
+              {plan.note || "Add note…"}
+            </span>
+          </span>
+          <span
+            className="shrink-0 font-mono text-[10px] tracking-widest"
+            style={{ color: tone ? tone.color : "var(--gold)" }}
           >
-            TRADE
-          </Link>
-          <button
-            type="button"
-            onClick={() => onRemove(plan.id)}
-            aria-label={`Delete ${plan.ticker || "note"}`}
-            className="rounded-md p-1.5 text-muted-foreground transition hover:text-destructive"
-          >
-            <Trash2 className="size-3.5" />
-          </button>
-        </div>
+            {tone ? tone.label : "PLAN"}
+          </span>
+        </button>
+        <Link
+          href={href}
+          className="shrink-0 rounded-md px-2 py-1 font-mono text-[10px] tracking-widest text-gold transition hover:bg-gold/15"
+        >
+          TRADE
+        </Link>
+        <button
+          type="button"
+          onClick={() => onRemove(plan.id)}
+          aria-label={`Delete ${plan.ticker || "note"}`}
+          className="shrink-0 rounded-md p-1 text-muted-foreground transition hover:text-destructive"
+        >
+          <Trash2 className="size-3.5" />
+        </button>
       </div>
-      <textarea
-        value={draft}
-        onChange={(event) => setDraft(event.target.value)}
-        onBlur={saveNote}
-        placeholder="Add note…"
-        rows={2}
-        aria-label={`${plan.ticker || "Plan"} note`}
-        className="mt-2 w-full resize-none rounded-lg border border-white/10 bg-black/40 px-2.5 py-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-gold/40"
-      />
     </li>
   );
 }

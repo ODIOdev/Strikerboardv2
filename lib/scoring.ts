@@ -13,7 +13,9 @@ import type {
 import {
   CATEGORIES,
   TIMEFRAMES,
+  clampSentiment,
   createTfBias,
+  isNewsCategory,
   isZoneCategory,
   resolveCategory,
 } from "./types";
@@ -51,7 +53,26 @@ export function playWeight(item: Confluence, timeframe: Timeframe): number {
 
 export const CANDLE_CONFIRM_BONUS = 1.25;
 
+export function newsSentiment(item: Confluence): number {
+  if (typeof item.sentiment === "number" && Number.isFinite(item.sentiment)) {
+    return clampSentiment(item.sentiment);
+  }
+  const map = item.biasByTf ?? createTfBias("bullish");
+  const bear = TIMEFRAMES.filter((tf) => map[tf] === "bearish").length;
+  const bull = TIMEFRAMES.filter((tf) => map[tf] === "bullish").length;
+  if (bear > bull) return 0;
+  if (bull > bear) return 100;
+  return 50;
+}
+
+export function newsHeat(item: Confluence): number {
+  return Math.abs(newsSentiment(item) - 50) / 50;
+}
+
 export function tfPoints(item: Confluence, timeframe: Timeframe): number {
+  if (isNewsCategory(item.category)) {
+    return 100 * timeframeMultiplier(timeframe) * newsHeat(item);
+  }
   const base = playWeight(item, timeframe) * timeframeMultiplier(timeframe);
   return item.candleConfirmed ? base * CANDLE_CONFIRM_BONUS : base;
 }
@@ -64,6 +85,7 @@ export function sidePoints(item: Confluence, side: TfSide): number {
 }
 
 export function itemMax(item: Confluence): number {
+  if (isNewsCategory(item.category)) return 100 * TF_SPAN;
   if (!isZoneCategory(item.category)) return item.weight * TF_SPAN;
   return ZONE_PLAY_POINTS.breakout * TF_SPAN;
 }

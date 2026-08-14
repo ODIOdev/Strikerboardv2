@@ -1,4 +1,10 @@
-import type { AssetClass, CalculatorInput, CalculatorResult } from "./types";
+import type {
+  AssetClass,
+  CalcSide,
+  CalculatorInput,
+  CalculatorResult,
+  TradeOutcome,
+} from "./types";
 
 const FOREX_BASES = new Set([
   "EUR",
@@ -99,6 +105,19 @@ export function createDefaultCalculator(): CalculatorInput {
     strike: 0,
     expiry: "",
   };
+}
+
+export function levelsForSide(
+  side: CalcSide,
+  stop: number,
+  target: number,
+): Pick<CalculatorInput, "stop" | "target"> {
+  if (stop <= 0 || target <= 0) return { stop, target };
+  const lo = Math.min(stop, target);
+  const hi = Math.max(stop, target);
+  return side === "short"
+    ? { stop: hi, target: lo }
+    : { stop: lo, target: hi };
 }
 
 export function normalizeTicker(value: string): string {
@@ -263,10 +282,43 @@ export function calculateTrade(
     rewardRisk,
     derivedTarget,
     usedRiskSize: input.size <= 0,
+    priceFactor,
   };
 }
 
-export function money(value: number, currency: string): string {
+export function unitValue(input: CalculatorInput, ticker: string): number {
+  const calc = calculateTrade(input, ticker);
+  return calc.size * calc.contractSize * calc.priceFactor;
+}
+
+export function pnlAtExit(
+  input: CalculatorInput,
+  ticker: string,
+  exit: number,
+): number {
+  if (!Number.isFinite(exit) || input.entry <= 0) return 0;
+  const calc = calculateTrade(input, ticker);
+  if (calc.size <= 0) return 0;
+  const move = input.side === "short" ? input.entry - exit : exit - input.entry;
+  return move * calc.size * calc.contractSize * calc.priceFactor;
+}
+
+export function outcomeAtExit(
+  input: CalculatorInput,
+  exit: number,
+): TradeOutcome {
+  const { side, stop, target, entry } = input;
+  if (side === "short") {
+    if (stop > 0 && exit >= stop) return "lost";
+    if (target > 0 && exit <= target) return "won";
+    return exit < entry ? "won" : "lost";
+  }
+  if (stop > 0 && exit <= stop) return "lost";
+  if (target > 0 && exit >= target) return "won";
+  return exit > entry ? "won" : "lost";
+}
+
+export function money(value: number, currency = "USD"): string {
   if (!Number.isFinite(value)) return "—";
   return new Intl.NumberFormat("en-US", {
     style: "currency",

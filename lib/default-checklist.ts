@@ -1,4 +1,4 @@
-import { createTfBias, createTfZone, type BoardState, type Confluence, type DeskState, type Trade } from "./types";
+import { createTfBias, createTfZone, isNewsCategory, newsFields, type BoardState, type Confluence, type DeskState, type Trade } from "./types";
 import { createDefaultCalculator } from "./calculator";
 
 export const DEFAULT_CONFLUENCES: Confluence[] = [
@@ -174,23 +174,59 @@ export const DEFAULT_CONFLUENCES: Confluence[] = [
   },
 ];
 
-export function createBlankConfluences(): Confluence[] {
-  return DEFAULT_CONFLUENCES.map((item) => ({
+export function toChecklistTemplate(items: Confluence[]): Confluence[] {
+  return items.map((item) => {
+    if (isNewsCategory(item.category)) {
+      return {
+        ...item,
+        active: false,
+        candleConfirmed: false,
+        zoneByTf: createTfZone("reaction"),
+        ...newsFields(50),
+      };
+    }
+    return {
+      ...item,
+      active: false,
+      candleConfirmed: false,
+      zoneByTf: createTfZone("reaction"),
+      biasByTf: createTfBias(),
+      newsTone: "good" as const,
+      sentiment: 50,
+    };
+  });
+}
+
+export function cloneChecklist(items: Confluence[]): Confluence[] {
+  return toChecklistTemplate(items).map((item) => ({
     ...item,
-    active: false,
-    candleConfirmed: false,
-    biasByTf: createTfBias(),
-    zoneByTf: createTfZone("reaction"),
+    id: crypto.randomUUID(),
   }));
 }
 
-export function createDefaultBoard(): BoardState {
+export function createBlankConfluences(template?: Confluence[]): Confluence[] {
+  return cloneChecklist(template ?? DEFAULT_CONFLUENCES);
+}
+
+export function ensureDeskChecklist(desk: DeskState): DeskState {
+  if (Array.isArray(desk.checklist)) {
+    return { ...desk, checklist: toChecklistTemplate(desk.checklist) };
+  }
+  return {
+    ...desk,
+    checklist: toChecklistTemplate(
+      desk.trades[0]?.confluences ?? createBlankConfluences(),
+    ),
+  };
+}
+
+export function createDefaultBoard(template?: Confluence[]): BoardState {
   return {
     ticker: "",
     recentTickers: [],
     bias: "bullish",
     wave: "A",
-    confluences: createBlankConfluences(),
+    confluences: createBlankConfluences(template),
   };
 }
 
@@ -200,12 +236,16 @@ export function createEmptyDesk(): DeskState {
     closedTrades: [],
     recentTickers: [],
     groups: [],
+    checklist: createBlankConfluences(),
   };
 }
 
-export function createTradeRecord(id = crypto.randomUUID()): Trade {
+export function createTradeRecord(
+  id = crypto.randomUUID(),
+  template?: Confluence[],
+): Trade {
   const now = Date.now();
-  const board = createDefaultBoard();
+  const board = createDefaultBoard(template);
   return {
     id,
     createdAt: now,

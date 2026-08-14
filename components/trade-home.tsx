@@ -1,8 +1,8 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { Check, FolderPlus, Pencil, Plus, Trash2 } from "lucide-react";
+import { Check, ChevronRight, FolderPlus, Pencil, Plus, Trash2 } from "lucide-react";
 import { DeskHud } from "@/components/desk-hud";
 import { MobileNav } from "@/components/side-nav";
 import { WorldClock } from "@/components/world-clock";
@@ -18,12 +18,23 @@ import { useDesk } from "@/hooks/use-desk";
 import { useNow } from "@/hooks/use-now";
 import { formatElapsed } from "@/lib/time";
 import type { TradeGroup } from "@/lib/types";
-import type { ScoredTrade } from "@/lib/desk-stats";
+import {
+  closedBookStats,
+  type ClosedStats,
+  type ScoredTrade,
+} from "@/lib/desk-stats";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 
 export function TradeHome() {
   const {
     hydrated,
     trades,
+    closedTrades,
     groups,
     deleteTrade,
     createGroup,
@@ -32,6 +43,11 @@ export function TradeHome() {
     setTradeGroup,
   } = useDesk();
   const now = useNow(hydrated && trades.length > 0);
+
+  const pnl = useMemo(
+    () => (hydrated ? closedBookStats(closedTrades) : null),
+    [hydrated, closedTrades],
+  );
 
   const ungrouped = useMemo(
     () => trades.filter((trade) => !trade.groupId),
@@ -55,18 +71,28 @@ export function TradeHome() {
         </header>
 
         <main className="mx-auto flex w-full max-w-[1200px] flex-1 flex-col gap-6 p-4 pb-10">
-          <div>
-            <h2 className="text-5xl font-black tracking-tight sm:text-6xl">
-              Striker Trade
-            </h2>
-            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-              Score a ticker by activating confluence prints across 5m, 15m, and
-              30m. The desk reads the board for long, short, or range, then grades
-              the setup A–C so you only fire when the rails are stacked.
-            </p>
+          <div className="space-y-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between lg:gap-5">
+              <div className="flex min-w-0 flex-1 flex-col items-start gap-3">
+                <h2 className="m-0">
+                  <img
+                    src="/logo.webp"
+                    alt="DeskStriker"
+                    width={1863}
+                    height={256}
+                    className="block h-auto w-[36rem] max-w-full shrink-0"
+                  />
+                </h2>
+                <p className="max-w-xl text-left text-sm leading-relaxed text-muted-foreground">
+                  Score a ticker by activating confluence prints across 5m, 15m, and
+                  30m. The desk reads the board for long, short, or range, then grades
+                  the setup A–C so you only fire when the rails are stacked.
+                </p>
+              </div>
+              <PnlInfographic stats={pnl} />
+            </div>
+            <WorldClock />
           </div>
-
-          <WorldClock />
 
           <DeskHud trades={hydrated ? trades : []} />
 
@@ -127,6 +153,238 @@ export function TradeHome() {
   );
 }
 
+const PNL_RING_R = 28;
+const PNL_RING_C = 2 * Math.PI * PNL_RING_R;
+
+function PnlInfographic({ stats }: { stats: ClosedStats | null }) {
+  const empty = !stats || stats.decided === 0;
+  const net = stats?.net ?? 0;
+  const winColor = net >= 0 ? "#b6ff3b" : "#ff3b5c";
+  const rate = empty ? 0 : stats.winRate;
+  const rateColor = empty
+    ? "#8b907c"
+    : stats.wins >= stats.losses
+      ? "#b6ff3b"
+      : "#ff3b5c";
+  const currency = stats?.currency ?? "USD";
+  const pnlTotal = Math.max((stats?.grossWin ?? 0) + (stats?.grossLoss ?? 0), 1);
+  const factor =
+    empty || !stats
+      ? "—"
+      : !Number.isFinite(stats.profitFactor)
+        ? "∞"
+        : stats.profitFactor === 0
+          ? "—"
+          : stats.profitFactor.toFixed(2);
+  const edgeNeedle = empty
+    ? 50
+    : Math.min(
+        100,
+        Math.max(0, 50 + (stats.expectancy / Math.max(stats.avgLoss, 1)) * 40),
+      );
+
+  return (
+    <section className="relative w-full shrink-0 overflow-hidden rounded-2xl border border-white/8 bg-black/35 p-3 lg:w-[24rem]">
+      <span
+        className="pointer-events-none absolute -top-16 -right-10 size-36 rounded-full blur-3xl"
+        style={{ background: winColor, opacity: 0.14 }}
+      />
+      <p className="font-mono text-[10px] tracking-[0.4em] text-muted-foreground">
+        POST TRADE
+      </p>
+      <Tabs defaultValue="pnl" className="mt-2 gap-0">
+        <div className="relative grid min-h-[5.5rem]">
+          <TabsContent
+            forceMount
+            value="pnl"
+            className="col-start-1 row-start-1 mt-0 h-full data-[state=inactive]:pointer-events-none data-[state=inactive]:invisible [&[hidden]]:block"
+          >
+            <div className="flex h-full flex-col items-center justify-center text-center">
+              <PnlMoney value={net} currency={currency} color={winColor} />
+              <div className="mt-2 flex h-1 w-full overflow-hidden rounded-full bg-white/8">
+                <span
+                  className="h-full bg-[#b6ff3b]"
+                  style={{
+                    width: `${((stats?.grossWin ?? 0) / pnlTotal) * 100}%`,
+                  }}
+                />
+                <span
+                  className="h-full bg-[#ff3b5c]"
+                  style={{
+                    width: `${((stats?.grossLoss ?? 0) / pnlTotal) * 100}%`,
+                  }}
+                />
+              </div>
+              <PnlCaption>
+                <span className="text-[#b6ff3b]">{stats?.wins ?? 0}W</span>
+                <span className="mx-1.5 text-white/20">·</span>
+                <span className="text-[#ff3b5c]">{stats?.losses ?? 0}L</span>
+                <span className="mx-1.5 text-white/20">·</span>
+                {stats?.count ?? 0} CLOSED
+              </PnlCaption>
+            </div>
+          </TabsContent>
+
+          <TabsContent
+            forceMount
+            value="rate"
+            className="col-start-1 row-start-1 mt-0 h-full data-[state=inactive]:pointer-events-none data-[state=inactive]:invisible [&[hidden]]:block"
+          >
+            <div className="flex h-full flex-col items-center justify-center text-center">
+              <PnlRing pct={rate} color={rateColor} />
+              <PnlCaption>
+                <span className="text-[#b6ff3b]">{stats?.wins ?? 0}W</span>
+                <span className="mx-1.5 text-white/20">·</span>
+                <span className="text-[#ff3b5c]">{stats?.losses ?? 0}L</span>
+                <span className="mx-1.5 text-white/20">·</span>
+                {stats?.decided ?? 0} TRADES
+              </PnlCaption>
+            </div>
+          </TabsContent>
+
+          <TabsContent
+            forceMount
+            value="edge"
+            className="col-start-1 row-start-1 mt-0 h-full data-[state=inactive]:pointer-events-none data-[state=inactive]:invisible [&[hidden]]:block"
+          >
+            <div className="flex h-full flex-col items-center justify-center text-center">
+              <PnlMoney
+                value={stats?.expectancy ?? 0}
+                currency={currency}
+                color="var(--gold)"
+              />
+              <div className="relative mt-2 h-1 w-full">
+                <div
+                  className="absolute inset-0 rounded-full opacity-80"
+                  style={{
+                    background:
+                      "linear-gradient(90deg, #ff3b5c 0%, #f4c430 50%, #b6ff3b 100%)",
+                  }}
+                />
+                <span
+                  className="absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-black bg-white shadow-[0_0_10px_rgb(255_255_255_/_55%)]"
+                  style={{ left: `${edgeNeedle}%` }}
+                />
+              </div>
+              <PnlCaption>
+                PF {factor}
+                <span className="mx-1.5 text-white/20">·</span>
+                PER TRADE
+              </PnlCaption>
+            </div>
+          </TabsContent>
+        </div>
+
+        <TabsList className="mt-2 grid h-8 w-full grid-cols-3 border border-white/8 bg-black/40">
+          <TabsTrigger
+            value="pnl"
+            className="font-mono text-[10px] tracking-[0.22em]"
+          >
+            P&L
+          </TabsTrigger>
+          <TabsTrigger
+            value="rate"
+            className="font-mono text-[10px] tracking-[0.22em]"
+          >
+            RATE
+          </TabsTrigger>
+          <TabsTrigger
+            value="edge"
+            className="font-mono text-[10px] tracking-[0.22em]"
+          >
+            EDGE
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+    </section>
+  );
+}
+
+function PnlCaption({ children }: { children: ReactNode }) {
+  return (
+    <p className="mt-1.5 font-mono text-[11px] font-bold tracking-widest text-muted-foreground">
+      {children}
+    </p>
+  );
+}
+
+function PnlMoney({
+  value,
+  currency,
+  color,
+}: {
+  value: number;
+  currency: string;
+  color: string;
+}) {
+  const abs = Math.abs(value);
+  const parts = new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).formatToParts(abs);
+  const symbol = parts.find((part) => part.type === "currency")?.value ?? "$";
+  const integer = parts
+    .filter((part) => part.type === "integer" || part.type === "group")
+    .map((part) => part.value)
+    .join("");
+  const fraction = parts.find((part) => part.type === "fraction")?.value ?? "00";
+  const sign = value > 0 ? "+" : value < 0 ? "−" : "";
+
+  return (
+    <p
+      className="flex items-baseline justify-center font-mono tabular-nums"
+      style={{ color, textShadow: `0 0 22px ${color}` }}
+    >
+      <span className="mr-1 text-sm font-medium opacity-55">
+        {sign}
+        {symbol}
+      </span>
+      <span className="text-3xl font-semibold tracking-tight">{integer}</span>
+      <span className="text-sm font-medium opacity-45">.{fraction}</span>
+    </p>
+  );
+}
+
+function PnlRing({ pct, color }: { pct: number; color: string }) {
+  const dash = (Math.min(100, Math.max(0, pct)) / 100) * PNL_RING_C;
+  return (
+    <div className="relative size-14">
+      <svg viewBox="0 0 72 72" className="size-full">
+        <circle
+          cx="36"
+          cy="36"
+          r={PNL_RING_R}
+          fill="none"
+          stroke="rgb(255 255 255 / 8%)"
+          strokeWidth="6"
+        />
+        <circle
+          cx="36"
+          cy="36"
+          r={PNL_RING_R}
+          fill="none"
+          stroke={color}
+          strokeWidth="6"
+          strokeDasharray={`${dash} ${PNL_RING_C}`}
+          strokeLinecap="round"
+          transform="rotate(-90 36 36)"
+        />
+      </svg>
+      <p
+        className="absolute inset-0 flex items-center justify-center font-mono tabular-nums"
+        style={{ color }}
+      >
+        <span className="text-xl font-semibold tracking-tight">
+          {Math.round(pct)}
+        </span>
+        <span className="ml-0.5 text-[10px] font-medium opacity-45">%</span>
+      </p>
+    </div>
+  );
+}
+
 function TradeSection({
   title,
   trades,
@@ -149,6 +407,7 @@ function TradeSection({
   onDeleteGroup?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(title);
 
   function saveName() {
@@ -167,11 +426,13 @@ function TradeSection({
       }
     >
       <div
-        className={
-          onDeleteGroup
-            ? "flex items-center justify-between gap-3 border-b border-gold/15 px-4 py-3 sm:px-5"
-            : "flex items-center justify-between gap-3 border-b border-white/8 px-4 py-3 sm:px-5"
-        }
+        className={`flex items-center justify-between gap-3 px-4 py-3 sm:px-5 ${
+          open
+            ? onDeleteGroup
+              ? "border-b border-gold/15"
+              : "border-b border-white/8"
+            : ""
+        }`}
       >
         {editing && onRenameGroup ? (
           <form
@@ -196,7 +457,12 @@ function TradeSection({
             />
           </form>
         ) : (
-          <div className="min-w-0">
+          <button
+            type="button"
+            onClick={() => setOpen((prev) => !prev)}
+            aria-expanded={open}
+            className="min-w-0 flex-1 text-left"
+          >
             <p className="font-mono text-[10px] tracking-[0.35em] text-muted-foreground">
               {onDeleteGroup ? "GROUP" : "BOOK"}
             </p>
@@ -208,34 +474,48 @@ function TradeSection({
                 {trades.length}
               </span>
             </div>
-          </div>
+          </button>
         )}
-        {onDeleteGroup ? (
-          <div className="flex items-center gap-1">
-            {onRenameGroup ? (
+        <div className="flex shrink-0 items-center gap-1">
+          {onDeleteGroup ? (
+            <>
+              {onRenameGroup ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDraft(title);
+                    setEditing(true);
+                  }}
+                  aria-label={`Rename ${title}`}
+                  className="rounded-md p-1.5 text-muted-foreground transition hover:bg-white/5 hover:text-foreground"
+                >
+                  <Pencil className="size-3.5" />
+                </button>
+              ) : null}
               <button
                 type="button"
-                onClick={() => {
-                  setDraft(title);
-                  setEditing(true);
-                }}
-                aria-label={`Rename ${title}`}
-                className="rounded-md p-1.5 text-muted-foreground transition hover:bg-white/5 hover:text-foreground"
+                onClick={onDeleteGroup}
+                aria-label={`Delete group ${title}`}
+                className="rounded-md p-1.5 text-muted-foreground transition hover:bg-white/5 hover:text-destructive"
               >
-                <Pencil className="size-3.5" />
+                <Trash2 className="size-3.5" />
               </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={onDeleteGroup}
-              aria-label={`Delete group ${title}`}
-              className="rounded-md p-1.5 text-muted-foreground transition hover:bg-white/5 hover:text-destructive"
-            >
-              <Trash2 className="size-3.5" />
-            </button>
-          </div>
-        ) : null}
+            </>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => setOpen((prev) => !prev)}
+            aria-expanded={open}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-white/35 bg-white/10 px-2.5 py-1.5 font-mono text-[10px] font-bold tracking-[0.22em] text-white shadow-[0_0_16px_rgb(255_255_255_/_18%)] transition hover:border-white hover:bg-white hover:text-black"
+          >
+            {open ? "CLOSE DETAILS" : "OPEN DETAILS"}
+            <ChevronRight
+              className={`size-3.5 transition-transform ${open ? "rotate-90" : ""}`}
+            />
+          </button>
+        </div>
       </div>
+      {open ? (
       <div className="p-4 sm:p-5">
       {trades.length === 0 ? (
         <p className="font-mono text-[10px] tracking-widest text-muted-foreground">
@@ -316,6 +596,7 @@ function TradeSection({
         </ul>
       )}
       </div>
+      ) : null}
     </section>
   );
 }

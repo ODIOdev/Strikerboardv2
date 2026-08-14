@@ -4,19 +4,39 @@ import { useEffect, useRef, useState } from "react";
 import { useNow } from "@/hooks/use-now";
 import { formatElapsed } from "@/lib/time";
 import {
+  WEEKDAY_SHORT,
   WORLD_ZONES,
   equityWindow,
-  formatZoneClock,
-  formatZoneWeekday,
   forexWindow,
+  zoneParts,
 } from "@/lib/markets";
 import {
   announceMarketOpen,
   playClosingBell,
-  testMarketAlerts,
   unlockMarketAudio,
 } from "@/lib/market-alerts";
 import { cn } from "@/lib/utils";
+
+const ZONE_FACE: Record<
+  (typeof WORLD_ZONES)[number]["id"],
+  { code: string; tone: string }
+> = {
+  ny: { code: "NYC", tone: "#b6ff3b" },
+  ldn: { code: "LDN", tone: "#f4c430" },
+  tko: { code: "TYO", tone: "#7ecbff" },
+  syd: { code: "SYD", tone: "#ff8a3b" },
+};
+
+function zoneOffset(date: Date, timeZone: string) {
+  const name = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    timeZoneName: "shortOffset",
+    hour: "2-digit",
+  })
+    .formatToParts(date)
+    .find((part) => part.type === "timeZoneName")?.value;
+  return name?.replace("GMT", "UTC") ?? "";
+}
 
 type ClockMode = "live" | "forex" | "stocks";
 
@@ -95,22 +115,7 @@ export function WorldClock() {
         ) : mode === "live" ? (
           <ul className="grid min-w-0 flex-1 grid-cols-2 gap-2 sm:grid-cols-4">
             {WORLD_ZONES.map((zone) => (
-              <li
-                key={zone.id}
-                className="rounded-xl border border-white/8 bg-black/40 px-2.5 py-2"
-              >
-                <div className="flex items-baseline justify-between gap-2">
-                  <p className="font-mono text-[9px] tracking-[0.22em] text-muted-foreground">
-                    {zone.label}
-                  </p>
-                  <p className="font-mono text-[9px] tracking-widest text-muted-foreground">
-                    {formatZoneWeekday(instant, zone.tz)}
-                  </p>
-                </div>
-                <p className="mt-1 font-mono text-lg font-semibold tabular-nums tracking-tight sm:text-xl">
-                  {formatZoneClock(instant, zone.tz)}
-                </p>
-              </li>
+              <ZoneTile key={zone.id} zone={zone} date={instant} />
             ))}
           </ul>
         ) : (
@@ -118,7 +123,6 @@ export function WorldClock() {
             now={now}
             window={mode === "forex" ? forexWindow(instant) : equityWindow(instant)}
             market={mode === "forex" ? "FOREX" : "US EQUITY"}
-            kind={mode}
           />
         )}
       </div>
@@ -126,16 +130,71 @@ export function WorldClock() {
   );
 }
 
+function ZoneTile({
+  zone,
+  date,
+}: {
+  zone: (typeof WORLD_ZONES)[number];
+  date: Date;
+}) {
+  const face = ZONE_FACE[zone.id];
+  const parts = zoneParts(date, zone.tz);
+  const hh = String(parts.hour).padStart(2, "0");
+  const mm = String(parts.minute).padStart(2, "0");
+  const ss = String(parts.second).padStart(2, "0");
+  const dayPct = ((parts.hour * 60 + parts.minute) / (24 * 60)) * 100;
+  const desk = parts.hour >= 8 && parts.hour < 17;
+  const offset = zoneOffset(date, zone.tz);
+
+  return (
+    <li className="relative overflow-hidden rounded-xl border border-white/8 bg-black/40 px-3 py-2.5">
+      <span
+        className="pointer-events-none absolute -top-8 -right-6 size-20 rounded-full blur-3xl"
+        style={{ background: face.tone, opacity: 0.16 }}
+      />
+      <div className="relative flex items-center justify-between gap-2">
+        <p
+          className="font-mono text-[10px] font-bold tracking-[0.28em]"
+          style={{ color: face.tone }}
+        >
+          {face.code}
+        </p>
+        <span className="rounded-full border border-white/10 bg-black/40 px-1.5 py-0.5 font-mono text-[9px] tracking-widest text-muted-foreground">
+          {WEEKDAY_SHORT[parts.weekday]}
+        </span>
+      </div>
+      <p className="relative mt-1 flex items-baseline font-mono tabular-nums tracking-tight">
+        <span className="text-2xl font-semibold">
+          {hh}:{mm}
+        </span>
+        <span className="ml-1 text-sm font-medium text-muted-foreground">
+          :{ss}
+        </span>
+      </p>
+      <div className="relative mt-2 h-0.5 overflow-hidden rounded-full bg-white/8">
+        <div
+          className="h-full rounded-full"
+          style={{ width: `${dayPct}%`, background: face.tone }}
+        />
+      </div>
+      <div className="relative mt-1.5 flex items-center justify-between gap-2 font-mono text-[9px] tracking-widest text-muted-foreground">
+        <span className="truncate">{zone.label}</span>
+        <span style={{ color: desk ? face.tone : undefined }}>
+          {desk ? "DESK" : offset || "OFF"}
+        </span>
+      </div>
+    </li>
+  );
+}
+
 function MarketCountdown({
   now,
   window,
   market,
-  kind,
 }: {
   now: number;
   window: ReturnType<typeof forexWindow>;
   market: string;
-  kind: "forex" | "stocks";
 }) {
   return (
     <div className="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-[auto_1fr_1fr] sm:items-stretch">
@@ -153,13 +212,6 @@ function MarketCountdown({
         >
           {window.open ? "OPEN" : "CLOSED"}
         </span>
-        <button
-          type="button"
-          onClick={() => void testMarketAlerts(kind)}
-          className="rounded-md border border-gold/40 bg-gold/15 px-2 py-1 font-mono text-[9px] tracking-widest text-gold transition hover:bg-gold hover:text-primary-foreground"
-        >
-          TEST ALERTS
-        </button>
       </div>
       <CountdownRow
         label="OPENS IN"

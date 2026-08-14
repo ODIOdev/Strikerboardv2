@@ -1,3 +1,4 @@
+import type { TfSide } from "./types";
 import { dateKey } from "./calendar";
 import { queueCloudPush } from "./supabase/queue";
 
@@ -8,6 +9,7 @@ export type Idea = {
   id: string;
   ticker: string;
   note: string;
+  bias: TfSide | null;
   createdAt: number;
   plannedFor: string;
 };
@@ -31,6 +33,10 @@ function coerceIdea(item: unknown): Idea | null {
     id: raw.id,
     ticker: raw.ticker,
     note: raw.note,
+    bias:
+      raw.bias === "bearish" || raw.bias === "bullish" || raw.bias === "range"
+        ? raw.bias
+        : null,
     createdAt: raw.createdAt,
     plannedFor,
   };

@@ -1,6 +1,6 @@
 import { calculateTrade, createDefaultCalculator } from "./calculator";
-import { categoryScore } from "./scoring";
-import type { Band, Category, ClosedTrade, ScoreResult, TfSide, Trade } from "./types";
+import { bandFor, categoryScore, gradeFor } from "./scoring";
+import type { Band, Category, ClosedTrade, ScoreResult, TfSide, Trade, Wave } from "./types";
 import { CATEGORIES } from "./types";
 
 export type ScoredTrade = Trade & { result: ScoreResult };
@@ -8,8 +8,11 @@ export type ScoredTrade = Trade & { result: ScoreResult };
 export type BookSentiment = {
   id: string;
   ticker: string;
-  side: TfSide;
+  side: TfSide | "even";
   score: number;
+  grade: Wave;
+  band: Band;
+  earned: number;
 };
 
 export type DeskStats = {
@@ -17,13 +20,22 @@ export type DeskStats = {
   bullish: number;
   bearish: number;
   range: number;
+  even: number;
   bullPct: number;
   bearPct: number;
   rangePct: number;
   lead: TfSide | "even";
   leadPct: number;
   conviction: number;
+  grade: Wave;
+  band: Band;
+  earned: number;
+  max: number;
+  longPts: number;
+  shortPts: number;
+  rangePts: number;
   bands: Record<Band, number>;
+  grades: Record<Wave, number>;
   avgScore: number;
   avgByCategory: Record<Category, number>;
   totalRisk: number;
@@ -33,9 +45,8 @@ export type DeskStats = {
   sentiments: BookSentiment[];
 };
 
-export function tradeSentiment(trade: ScoredTrade): TfSide {
-  const winning = trade.result.overall.winning;
-  return winning === "even" ? trade.bias : winning;
+export function tradeSentiment(trade: ScoredTrade): TfSide | "even" {
+  return trade.result.overall.winning;
 }
 
 export type BookLine = {
@@ -58,37 +69,54 @@ export function deskStats(trades: ScoredTrade[]): DeskStats {
   let shortPts = 0;
   let rangePts = 0;
 
+  let earned = 0;
+  let max = 0;
+  const grades: Record<Wave, number> = { A: 0, B: 0, C: 0 };
+
   for (const trade of trades) {
     const side = tradeSentiment(trade);
     if (side === "bullish") bullish += 1;
     else if (side === "bearish") bearish += 1;
-    else range += 1;
+    else if (side === "range") range += 1;
     longPts += trade.result.overall.longEarned;
     shortPts += trade.result.overall.shortEarned;
     rangePts += trade.result.overall.rangeEarned;
+    earned += trade.result.earned;
+    max += trade.result.max;
+    grades[trade.result.grade] += 1;
     sentiments.push({
       id: trade.id,
       ticker: trade.ticker || "UNTITLED",
       side,
       score: trade.result.score,
+      grade: trade.result.grade,
+      band: trade.result.band,
+      earned: trade.result.earned,
     });
   }
 
   const pts = longPts + shortPts + rangePts;
+  const sided = bullish + bearish + range;
   const bullPct =
     count === 0
       ? 0
       : pts > 0
         ? Math.round((longPts / pts) * 100)
-        : Math.round((bullish / count) * 100);
+        : sided > 0
+          ? Math.round((bullish / sided) * 100)
+          : 0;
   const bearPct =
     count === 0
       ? 0
       : pts > 0
         ? Math.round((shortPts / pts) * 100)
-        : Math.round((bearish / count) * 100);
+        : sided > 0
+          ? Math.round((bearish / sided) * 100)
+          : 0;
   const rangePct =
-    count === 0 ? 0 : Math.max(0, 100 - bullPct - bearPct);
+    count === 0 || (pts === 0 && sided === 0)
+      ? 0
+      : Math.max(0, 100 - bullPct - bearPct);
 
   let lead: DeskStats["lead"] = "even";
   let leadPct = 0;
@@ -106,30 +134,31 @@ export function deskStats(trades: ScoredTrade[]): DeskStats {
     } else {
       leadPct = Math.round((best / pts) * 100);
     }
-  } else if (bullish > bearish && bullish >= range) {
+  } else if (bullish > bearish && bullish >= range && bullish > 0) {
     lead = "bullish";
     leadPct = bullPct;
-  } else if (bearish > bullish && bearish >= range) {
+  } else if (bearish > bullish && bearish >= range && bearish > 0) {
     lead = "bearish";
     leadPct = bearPct;
   } else if (range > bullish && range > bearish) {
     lead = "range";
     leadPct = rangePct;
-  } else if (count > 0) {
-    leadPct = 50;
-  }
-
-  const conviction = pts > 0 ? (Math.max(longPts, shortPts, rangePts) / pts) * 100 : leadPct;
-
-  const bands: Record<Band, number> = { Prime: 0, Valid: 0, Watch: 0 };
-  for (const trade of trades) {
-    bands[trade.result.band] += 1;
   }
 
   const avgScore =
     count === 0
       ? 0
       : trades.reduce((sum, trade) => sum + trade.result.score, 0) / count;
+  const conviction = avgScore;
+
+  const bands: Record<Band, number> = { Prime: 0, Valid: 0, Watch: 0 };
+  for (const trade of trades) {
+    bands[trade.result.band] += 1;
+  }
+
+  const even = count - sided;
+  const grade = gradeFor(avgScore);
+  const band = bandFor(avgScore);
 
   const avgByCategory = Object.fromEntries(
     CATEGORIES.map((category) => {
@@ -167,13 +196,22 @@ export function deskStats(trades: ScoredTrade[]): DeskStats {
     bullish,
     bearish,
     range,
+    even,
     bullPct,
     bearPct,
     rangePct,
     lead,
     leadPct,
     conviction,
+    grade,
+    band,
+    earned,
+    max,
+    longPts,
+    shortPts,
+    rangePts,
     bands,
+    grades,
     avgScore,
     avgByCategory,
     totalRisk,

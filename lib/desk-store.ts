@@ -1,9 +1,10 @@
-import { createEmptyDesk, createTradeRecord } from "./default-checklist";
-import { calculateTrade, inferAssetClass, normalizeTicker } from "./calculator";
+import { createEmptyDesk, createTradeRecord, ensureDeskChecklist, toChecklistTemplate } from "./default-checklist";
+import { inferAssetClass, normalizeTicker, outcomeAtExit, pnlAtExit } from "./calculator";
 import { csvToDesk } from "./csv";
 import { loadDesk, saveDesk } from "./storage";
 import { queueCloudPush } from "./supabase/queue";
-import type { ClosedTrade, DeskState, Trade, TradeOutcome } from "./types";
+import { removeTradeCharts } from "./trade-charts";
+import type { ClosedTrade, DeskState, Trade } from "./types";
 
 const listeners = new Set<() => void>();
 const serverSnapshot = createEmptyDesk();
@@ -23,7 +24,7 @@ export function subscribeDesk(listener: () => void) {
 
 export function getDeskSnapshot(): DeskState {
   if (!loaded) {
-    snapshot = loadDesk();
+    snapshot = ensureDeskChecklist(loadDesk());
     loaded = true;
   }
   return snapshot;
@@ -41,13 +42,14 @@ export function writeDesk(
     loaded = true;
   }
   snapshot = typeof next === "function" ? next(snapshot) : next;
+  snapshot = ensureDeskChecklist(snapshot);
   saveDesk(snapshot);
   queueCloudPush();
   emit();
 }
 
 export function createTrade(ticker?: string): Trade {
-  const trade = createTradeRecord();
+  const trade = createTradeRecord(undefined, getDeskSnapshot().checklist);
   const symbol = ticker ? normalizeTicker(ticker) : "";
   if (symbol) {
     trade.ticker = symbol;
@@ -74,17 +76,24 @@ export function deleteTrade(id: string) {
     ...prev,
     trades: prev.trades.filter((trade) => trade.id !== id),
   }));
+  void removeTradeCharts(id);
 }
 
-export function closeTrade(
-  id: string,
-  outcome: TradeOutcome,
-): ClosedTrade | null {
+export function deleteClosedTrade(id: string) {
+  writeDesk((prev) => ({
+    ...prev,
+    closedTrades: prev.closedTrades.filter((trade) => trade.id !== id),
+  }));
+  void removeTradeCharts(id);
+}
+
+export function closeTrade(id: string, exitPrice: number): ClosedTrade | null {
   const current = getDeskSnapshot().trades.find((item) => item.id === id);
   if (!current) return null;
-  const calc = calculateTrade(current.calculator, current.ticker);
-  const realizedPnl =
-    outcome === "won" ? calc.takeProfit : -Math.abs(calc.stopLoss);
+  const exit = Number(exitPrice);
+  if (!Number.isFinite(exit) || exit <= 0) return null;
+  const realizedPnl = pnlAtExit(current.calculator, current.ticker, exit);
+  const outcome = outcomeAtExit(current.calculator, exit);
   const closed: ClosedTrade = {
     ...current,
     closedAt: Date.now(),
@@ -103,6 +112,7 @@ export function closeTrade(
 export function writeTrade(
   id: string,
   next: Trade | ((prev: Trade) => Trade),
+  options?: { syncChecklist?: boolean },
 ) {
   writeDesk((prev) => {
     const current = prev.trades.find((trade) => trade.id === id);
@@ -113,6 +123,9 @@ export function writeTrade(
       trades: prev.trades.map((trade) =>
         trade.id === id ? { ...updated, updatedAt: Date.now() } : trade,
       ),
+      checklist: options?.syncChecklist
+        ? toChecklistTemplate(updated.confluences)
+        : prev.checklist,
     };
   });
 }
@@ -217,7 +230,7 @@ export function resetDesk() {
 }
 
 export function replaceDesk(next: DeskState) {
-  snapshot = next;
+  snapshot = ensureDeskChecklist(next);
   loaded = true;
   saveDesk(snapshot);
   queueCloudPush();

@@ -20,7 +20,9 @@ import {
   CATEGORIES,
   CATEGORY_SHORT,
   TIMEFRAMES,
+  isNewsCategory,
   isZoneCategory,
+  newsToneFromSentiment,
   resolveCategory,
 } from "@/lib/types";
 import {
@@ -325,6 +327,10 @@ function ConfluenceRow({ item }: { item: Confluence }) {
   const max = itemMax(item);
   const pct = max > 0 ? (earned / max) * 100 : 0;
   const zone = isZoneCategory(item.category);
+  const news = isNewsCategory(item.category);
+  const tone =
+    item.newsTone ?? newsToneFromSentiment(item.sentiment ?? 50);
+  const bad = tone === "bad";
 
   return (
     <li className={cn("px-3 py-2", item.active ? "" : "opacity-40")}>
@@ -341,20 +347,37 @@ function ConfluenceRow({ item }: { item: Confluence }) {
         />
       </div>
       <div className="mt-1.5 flex flex-wrap items-center gap-1">
-        {TIMEFRAMES.map((timeframe) => {
-          const bias = item.biasByTf?.[timeframe] ?? "bullish";
-          const play = item.zoneByTf?.[timeframe] ?? "reaction";
-          return (
+        {news ? (
+          <>
             <span
-              key={timeframe}
-              className="rounded-md border border-white/10 px-1.5 py-0.5 font-mono text-[9px] tracking-widest"
-              style={{ color: WIN_TONE[bias] }}
+              className="rounded-md px-1.5 py-0.5 font-mono text-[9px] tracking-widest"
+              style={{
+                background: bad ? "#ff3b5c" : "#b6ff3b",
+                color: bad ? "#fff" : "#0b1204",
+              }}
             >
-              {timeframe}M {SIDE_LABEL[bias]}
-              {zone ? ` · ${play.toUpperCase()}` : ""}
+              {bad ? "BAD NEWS" : "GOOD NEWS"}
             </span>
-          );
-        })}
+            <span className="rounded-md border border-white/10 px-1.5 py-0.5 font-mono text-[9px] tracking-widest text-muted-foreground">
+              SENT {Math.round(item.sentiment ?? 50)}
+            </span>
+          </>
+        ) : (
+          TIMEFRAMES.map((timeframe) => {
+            const bias = item.biasByTf?.[timeframe] ?? "bullish";
+            const play = item.zoneByTf?.[timeframe] ?? "reaction";
+            return (
+              <span
+                key={timeframe}
+                className="rounded-md border border-white/10 px-1.5 py-0.5 font-mono text-[9px] tracking-widest"
+                style={{ color: WIN_TONE[bias] }}
+              >
+                {timeframe}M {SIDE_LABEL[bias]}
+                {zone ? ` · ${play.toUpperCase()}` : ""}
+              </span>
+            );
+          })
+        )}
         {item.candleConfirmed ? (
           <span className="rounded-md bg-[#4de8c8]/15 px-1.5 py-0.5 font-mono text-[9px] tracking-widest text-[#4de8c8]">
             CANDLE

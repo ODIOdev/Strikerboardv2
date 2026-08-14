@@ -72,6 +72,7 @@ export function StrikerDesk({ tradeId }: StrikerDeskProps) {
 
         <main className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col gap-3 p-3 pb-6">
           <TradeCalculator
+            tradeId={tradeId}
             ticker={trade.ticker}
             value={trade.calculator}
             onChange={board.patchCalculator}
@@ -86,8 +87,10 @@ export function StrikerDesk({ tradeId }: StrikerDeskProps) {
             />
             <StrikeWindow
               result={result}
-              onClose={(outcome) => {
-                closeTrade(tradeId, outcome);
+              ticker={trade.ticker}
+              calculator={trade.calculator}
+              onClose={(exitPrice) => {
+                closeTrade(tradeId, exitPrice);
                 if (trade.ticker) removeIdeasByTicker(trade.ticker);
                 router.replace("/");
               }}

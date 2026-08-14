@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   calculateTrade,
   isStockOptions,
@@ -8,6 +8,13 @@ import {
   qty,
 } from "@/lib/calculator";
 import { ClosedTicketData, ClosedTradeDetail } from "@/components/closed-trade-detail";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   addMonths,
   dateKey,
@@ -23,12 +30,6 @@ import { formatScore } from "@/lib/scoring";
 import { closedBookStats, type ClosedStats } from "@/lib/desk-stats";
 import { useDesk } from "@/hooks/use-desk";
 import { cn } from "@/lib/utils";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
 
 function formatAgo(timestamp: number) {
   const minutes = Math.max(0, Math.floor((Date.now() - timestamp) / 60_000));
@@ -50,20 +51,25 @@ function formatClosedAt(timestamp: number) {
 }
 
 export function ClosedBookPreview() {
-  const { hydrated, closedTrades } = useDesk();
+  const { hydrated, closedTrades, deleteClosedTrade } = useDesk();
 
   return (
     <>
       <p className="px-2 py-1 font-mono text-[9px] tracking-[0.28em] text-muted-foreground">
         CLOSED BOOK
       </p>
-      <ClosedBookBody hydrated={hydrated} compact trades={closedTrades} />
+      <ClosedBookBody
+        hydrated={hydrated}
+        compact
+        trades={closedTrades}
+        onDelete={deleteClosedTrade}
+      />
     </>
   );
 }
 
 export function ClosedBookSection() {
-  const { hydrated, closedTrades } = useDesk();
+  const { hydrated, closedTrades, deleteClosedTrade } = useDesk();
   const [cursor, setCursor] = useState(() => new Date());
   const [selected, setSelected] = useState("");
   const todayKey = hydrated ? dateKey(new Date()) : "";
@@ -86,11 +92,11 @@ export function ClosedBookSection() {
     return map;
   }, [closedTrades]);
 
-  const visible = selected ? (byDate.get(selected) ?? []) : closedTrades;
+  const dayTrades = selected ? (byDate.get(selected) ?? []) : [];
 
   function selectDay(date: Date) {
     const key = dateKey(date);
-    setSelected((prev) => (prev === key ? "" : key));
+    setSelected(key);
     setCursor(date);
   }
 
@@ -116,7 +122,7 @@ export function ClosedBookSection() {
           </div>
         </div>
         {hydrated && closedTrades.length > 0 ? (
-          <p className="shrink-0 font-mono text-[10px] tracking-widest">
+          <p className="shrink-0 font-mono text-sm font-bold tracking-widest">
             <span className="text-[#b6ff3b]">{wins}W</span>
             <span className="text-muted-foreground"> · </span>
             <span className="text-[#ff3b5c]">{losses}L</span>
@@ -132,203 +138,292 @@ export function ClosedBookSection() {
         onToday={goToday}
         onSelect={selectDay}
       />
+      <ClosedDayDialog
+        dayKey={selected}
+        trades={dayTrades}
+        hydrated={hydrated}
+        onOpenChange={(open) => {
+          if (!open) setSelected("");
+        }}
+        onDelete={deleteClosedTrade}
+      />
       <div className="p-4 sm:p-5">
-        {selected ? (
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <p className="font-mono text-[10px] tracking-[0.28em] text-muted-foreground">
-              {formatDayLabel(parseDateKey(selected))}
-              <span className="ml-2 text-foreground/50">{visible.length}</span>
-            </p>
-            <button
-              type="button"
-              onClick={() => setSelected("")}
-              className="font-mono text-[10px] tracking-widest text-gold hover:text-foreground"
-            >
-              ALL
-            </button>
-          </div>
-        ) : null}
         <ClosedBookBody
           hydrated={hydrated}
-          trades={visible}
-          emptyLabel={selected ? "NO CLOSES THIS DAY" : undefined}
+          trades={closedTrades}
+          onDelete={deleteClosedTrade}
         />
       </div>
     </section>
   );
 }
 
-function signedMoney(value: number, currency: string) {
-  if (value === 0) return money(0, currency);
-  return `${value > 0 ? "+" : "−"}${money(Math.abs(value), currency)}`;
-}
-
-function rate(wins: number, total: number) {
-  if (total === 0) return "—";
-  return `${Math.round((wins / total) * 100)}%`;
-}
-
-function ClosedPostTabs({ stats }: { stats: ClosedStats }) {
+export function ClosedPostTabs({
+  stats,
+  className,
+}: {
+  stats: ClosedStats;
+  className?: string;
+}) {
+  const empty = stats.decided === 0;
   const winColor = stats.net >= 0 ? "#b6ff3b" : "#ff3b5c";
+  const rateColor = empty
+    ? "#8b907c"
+    : stats.wins >= stats.losses
+      ? "#b6ff3b"
+      : "#ff3b5c";
   const factor =
     !Number.isFinite(stats.profitFactor)
       ? "∞"
       : stats.profitFactor === 0
         ? "—"
         : stats.profitFactor.toFixed(2);
+  const winPct = empty ? 0 : (stats.wins / stats.decided) * 100;
+  const pnlTotal = Math.max(stats.grossWin + stats.grossLoss, 1);
+  const longWr = stats.longCount === 0 ? 0 : (stats.longWins / stats.longCount) * 100;
+  const shortWr =
+    stats.shortCount === 0 ? 0 : (stats.shortWins / stats.shortCount) * 100;
+  const edgeNeedle = Math.min(
+    100,
+    Math.max(0, 50 + (stats.expectancy / Math.max(stats.avgLoss, 1)) * 40),
+  );
 
   return (
-    <div className="border-b border-white/8 px-4 py-3 sm:px-5">
+    <div className={cn("border-b border-white/8 px-4 py-3 sm:px-5", className)}>
       <p className="font-mono text-[10px] tracking-[0.35em] text-muted-foreground">
         POST TRADE
       </p>
-      <Tabs defaultValue="rate" className="mt-2">
-        <TabsList
-          variant="line"
-          className="w-full justify-start border-b border-white/8 bg-transparent"
-        >
-          <TabsTrigger value="rate" className="font-mono text-[10px] tracking-widest">
-            Win rate
-          </TabsTrigger>
-          <TabsTrigger value="pnl" className="font-mono text-[10px] tracking-widest">
-            P&L
-          </TabsTrigger>
-          <TabsTrigger value="edge" className="font-mono text-[10px] tracking-widest">
-            Edge
-          </TabsTrigger>
-          <TabsTrigger value="mix" className="font-mono text-[10px] tracking-widest">
-            Mix
-          </TabsTrigger>
-        </TabsList>
+      <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatBox label="WIN RATE">
+          <div className="flex items-center justify-between gap-3">
+            <PercentHero pct={empty ? 0 : winPct} color={rateColor} />
+            <RingMeter pct={winPct} color={rateColor} />
+          </div>
+          <p className="font-mono text-sm tracking-widest text-muted-foreground">
+            <span className="text-[#b6ff3b]">{stats.wins}W</span>
+            <span className="mx-1.5 text-white/20">·</span>
+            <span className="text-[#ff3b5c]">{stats.losses}L</span>
+            <span className="mx-1.5 text-white/20">·</span>
+            {stats.decided} TRADES
+          </p>
+        </StatBox>
 
-        <TabsContent value="rate" className="mt-4">
-          <div className="flex items-end justify-between gap-3">
-            <div>
-              <p
-                className="font-mono text-5xl font-black tracking-tighter"
-                style={{
-                  color: stats.winRate >= 50 ? "#b6ff3b" : "#ff3b5c",
-                  textShadow: `0 0 22px ${stats.winRate >= 50 ? "#b6ff3b" : "#ff3b5c"}`,
-                }}
-              >
-                {stats.decided === 0 ? "—" : `${Math.round(stats.winRate)}%`}
-              </p>
-              <p className="mt-1 font-mono text-[10px] tracking-widest text-muted-foreground">
-                {stats.wins}W · {stats.losses}L · {stats.decided} DECIDED
-              </p>
-            </div>
-          </div>
-          <div className="mt-3 flex h-2 overflow-hidden rounded-full bg-white/8">
-            <span
-              className="h-full bg-[#b6ff3b]"
-              style={{ width: `${stats.decided === 0 ? 0 : stats.winRate}%` }}
+        <StatBox label="P&L">
+          <div>
+            <MoneyHero
+              value={stats.net}
+              currency={stats.currency}
+              color={winColor}
             />
-            <span
-              className="h-full bg-[#ff3b5c]"
-              style={{
-                width: `${stats.decided === 0 ? 0 : Math.max(0, 100 - stats.winRate)}%`,
-              }}
+            <SplitBar
+              left={stats.grossWin}
+              right={stats.grossLoss}
+              total={pnlTotal}
             />
           </div>
-        </TabsContent>
+          <p className="font-mono text-[10px] tracking-widest text-muted-foreground">
+            {stats.count} CLOSED
+          </p>
+        </StatBox>
 
-        <TabsContent value="pnl" className="mt-4">
-          <p
-            className="font-mono text-5xl font-black tracking-tighter"
-            style={{ color: winColor, textShadow: `0 0 22px ${winColor}` }}
-          >
-            {signedMoney(stats.net, stats.currency)}
-          </p>
-          <p className="mt-1 font-mono text-[10px] tracking-widest text-muted-foreground">
-            NET · {stats.count} CLOSED
-          </p>
-          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <PostStat label="GROSS +" value={signedMoney(stats.grossWin, stats.currency)} tone="#b6ff3b" />
-            <PostStat label="GROSS −" value={signedMoney(-stats.grossLoss, stats.currency)} tone="#ff3b5c" />
-            <PostStat label="BEST" value={signedMoney(stats.best, stats.currency)} tone="#b6ff3b" />
-            <PostStat label="WORST" value={signedMoney(stats.worst, stats.currency)} tone="#ff3b5c" />
+        <StatBox label="EDGE">
+          <div>
+            <MoneyHero
+              value={stats.expectancy}
+              currency={stats.currency}
+              color="var(--gold)"
+            />
+            <HeatTrack value={empty ? 50 : edgeNeedle} />
           </div>
-        </TabsContent>
+          <p className="font-mono text-[10px] tracking-widest text-muted-foreground">
+            PF {factor}
+            <span className="mx-1.5 text-white/20">·</span>
+            PER TRADE
+          </p>
+        </StatBox>
 
-        <TabsContent value="edge" className="mt-4">
-          <p className="font-mono text-5xl font-black tracking-tighter text-gold">
-            {signedMoney(stats.expectancy, stats.currency)}
-          </p>
-          <p className="mt-1 font-mono text-[10px] tracking-widest text-muted-foreground">
-            EXPECTANCY / TRADE
-          </p>
-          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <PostStat label="PROFIT FACTOR" value={factor} tone="#f4c430" />
-            <PostStat
-              label="AVG R"
-              value={stats.avgRR > 0 ? `${stats.avgRR.toFixed(2)}R` : "—"}
-              tone="#f4c430"
+        <StatBox label="MIX">
+          <div className="flex flex-1 flex-col justify-center gap-3">
+            <MeterRow
+              label="LONG"
+              pct={longWr}
+              note={`${stats.longWins}/${stats.longCount}`}
+              color="#b6ff3b"
             />
-            <PostStat
-              label="AVG WIN"
-              value={signedMoney(stats.avgWin, stats.currency)}
-              tone="#b6ff3b"
-            />
-            <PostStat
-              label="AVG LOSS"
-              value={signedMoney(-stats.avgLoss, stats.currency)}
-              tone="#ff3b5c"
+            <MeterRow
+              label="SHORT"
+              pct={shortWr}
+              note={`${stats.shortWins}/${stats.shortCount}`}
+              color="#ff3b5c"
             />
           </div>
-        </TabsContent>
-
-        <TabsContent value="mix" className="mt-4">
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <PostStat
-              label="LONG WR"
-              value={rate(stats.longWins, stats.longCount)}
-              tone="#b6ff3b"
-            />
-            <PostStat
-              label="SHORT WR"
-              value={rate(stats.shortWins, stats.shortCount)}
-              tone="#ff3b5c"
-            />
-            <PostStat
-              label="WIN SCORE"
-              value={formatScore(stats.avgWinScore)}
-              tone="#b6ff3b"
-            />
-            <PostStat
-              label="LOSS SCORE"
-              value={formatScore(stats.avgLossScore)}
-              tone="#ff3b5c"
-            />
-          </div>
-          <p className="mt-3 font-mono text-[10px] tracking-widest text-muted-foreground">
-            AVG CLOSED SCORE {formatScore(stats.avgScore)} · {stats.longCount} LONG · {stats.shortCount} SHORT
-          </p>
-        </TabsContent>
-      </Tabs>
+        </StatBox>
+      </div>
     </div>
   );
 }
 
-function PostStat({
+function StatBox({
   label,
-  value,
-  tone,
+  children,
 }: {
   label: string;
-  value: string;
-  tone?: string;
+  children: ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-white/8 bg-black/30 px-2.5 py-2">
-      <p className="font-mono text-[8px] tracking-[0.22em] text-muted-foreground">
+    <div className="flex min-h-[168px] flex-col rounded-2xl border border-white/8 bg-black/30 px-4 py-3.5">
+      <p className="font-mono text-[10px] tracking-[0.32em] text-muted-foreground">
         {label}
       </p>
-      <p
-        className="mt-0.5 font-mono text-sm font-semibold tabular-nums tracking-tight"
-        style={tone ? { color: tone } : undefined}
-      >
-        {value}
-      </p>
+      <div className="mt-4 flex flex-1 flex-col justify-between gap-4">{children}</div>
+    </div>
+  );
+}
+
+function PercentHero({ pct, color }: { pct: number; color: string }) {
+  return (
+    <p className="flex items-baseline font-mono tabular-nums" style={{ color }}>
+      <span className="text-3xl font-semibold tracking-tight">
+        {Math.round(pct)}
+      </span>
+      <span className="ml-0.5 text-lg font-medium opacity-45">%</span>
+    </p>
+  );
+}
+
+function MoneyHero({
+  value,
+  currency,
+  color,
+}: {
+  value: number;
+  currency: string;
+  color: string;
+}) {
+  const abs = Math.abs(value);
+  const parts = new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).formatToParts(abs);
+  const symbol = parts.find((part) => part.type === "currency")?.value ?? "$";
+  const integer = parts
+    .filter((part) => part.type === "integer" || part.type === "group")
+    .map((part) => part.value)
+    .join("");
+  const fraction = parts.find((part) => part.type === "fraction")?.value ?? "00";
+  const sign = value > 0 ? "+" : value < 0 ? "−" : "";
+
+  return (
+    <p className="flex items-baseline font-mono tabular-nums" style={{ color }}>
+      <span className="mr-1 text-lg font-medium opacity-55">
+        {sign}
+        {symbol}
+      </span>
+      <span className="text-3xl font-semibold tracking-tight">{integer}</span>
+      <span className="text-lg font-medium opacity-45">.{fraction}</span>
+    </p>
+  );
+}
+
+const RING_R = 22;
+const RING_C = 2 * Math.PI * RING_R;
+
+function RingMeter({ pct, color }: { pct: number; color: string }) {
+  const dash = (Math.min(100, Math.max(0, pct)) / 100) * RING_C;
+  return (
+    <svg viewBox="0 0 56 56" className="size-20 shrink-0">
+      <circle
+        cx="28"
+        cy="28"
+        r={RING_R}
+        fill="none"
+        stroke="rgb(255 255 255 / 8%)"
+        strokeWidth="5"
+      />
+      <circle
+        cx="28"
+        cy="28"
+        r={RING_R}
+        fill="none"
+        stroke={color}
+        strokeWidth="5"
+        strokeDasharray={`${dash} ${RING_C}`}
+        strokeLinecap="round"
+        transform="rotate(-90 28 28)"
+      />
+    </svg>
+  );
+}
+
+function SplitBar({
+  left,
+  right,
+  total,
+}: {
+  left: number;
+  right: number;
+  total: number;
+}) {
+  return (
+    <div className="mt-4 flex h-1 overflow-hidden rounded-full bg-white/8">
+      <span
+        className="h-full bg-[#b6ff3b]"
+        style={{ width: `${(left / total) * 100}%` }}
+      />
+      <span
+        className="h-full bg-[#ff3b5c]"
+        style={{ width: `${(right / total) * 100}%` }}
+      />
+    </div>
+  );
+}
+
+function HeatTrack({ value }: { value: number }) {
+  return (
+    <div className="relative mt-4 h-1">
+      <div
+        className="absolute inset-0 rounded-full opacity-70"
+        style={{
+          background:
+            "linear-gradient(90deg, #ff3b5c 0%, #f4c430 50%, #b6ff3b 100%)",
+        }}
+      />
+      <span
+        className="absolute top-1/2 h-2.5 w-px -translate-x-1/2 -translate-y-1/2 bg-white"
+        style={{ left: `${value}%` }}
+      />
+    </div>
+  );
+}
+
+function MeterRow({
+  label,
+  pct,
+  note,
+  color,
+}: {
+  label: string;
+  pct: number;
+  note: string;
+  color: string;
+}) {
+  return (
+    <div>
+      <div className="mb-1 flex items-baseline justify-between gap-2 font-mono text-[10px] tracking-widest">
+        <span style={{ color }}>{label}</span>
+        <span className="tabular-nums text-muted-foreground">
+          {Math.round(pct)}%
+          <span className="ml-1.5 text-white/30">{note}</span>
+        </span>
+      </div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-white/8">
+        <div
+          className="h-full rounded-full"
+          style={{ width: `${Math.min(100, pct)}%`, background: color }}
+        />
+      </div>
     </div>
   );
 }
@@ -486,19 +581,96 @@ function Chevron({ dir }: { dir: -1 | 1 }) {
   );
 }
 
+function ClosedDayDialog({
+  dayKey,
+  trades,
+  hydrated,
+  onOpenChange,
+  onDelete,
+}: {
+  dayKey: string;
+  trades: ReturnType<typeof useDesk>["closedTrades"];
+  hydrated: boolean;
+  onOpenChange: (open: boolean) => void;
+  onDelete: (id: string) => void;
+}) {
+  const stats = trades.length > 0 ? closedBookStats(trades) : null;
+  const wins = trades.filter((trade) => trade.outcome === "won").length;
+  const losses = trades.filter((trade) => trade.outcome === "lost").length;
+
+  return (
+    <Dialog open={Boolean(dayKey)} onOpenChange={onOpenChange}>
+      <DialogContent className="flex max-h-[min(88vh,46rem)] max-w-2xl flex-col overflow-hidden">
+        <DialogHeader>
+          <p className="font-mono text-[10px] tracking-[0.35em] text-muted-foreground">
+            SESSION
+          </p>
+          <DialogTitle className="font-mono text-xl font-semibold tracking-tight">
+            {dayKey ? formatDayLabel(parseDateKey(dayKey)) : "Day"}
+          </DialogTitle>
+          <DialogDescription className="font-mono text-[10px] tracking-widest">
+            {trades.length === 0 ? (
+              "NO CLOSES"
+            ) : (
+              <>
+                {trades.length} TRADE{trades.length === 1 ? "" : "S"}
+                <span className="mx-1.5 text-white/20">·</span>
+                <span className="text-[#b6ff3b]">{wins}W</span>
+                <span className="mx-1.5 text-white/20">·</span>
+                <span className="text-[#ff3b5c]">{losses}L</span>
+                {stats ? (
+                  <>
+                    <span className="mx-1.5 text-white/20">·</span>
+                    <span
+                      style={{
+                        color: stats.net >= 0 ? "#b6ff3b" : "#ff3b5c",
+                      }}
+                    >
+                      {stats.net >= 0 ? "+" : "−"}
+                      {money(Math.abs(stats.net), stats.currency)}
+                    </span>
+                  </>
+                ) : null}
+              </>
+            )}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
+          <ClosedBookBody
+            key={dayKey}
+            hydrated={hydrated}
+            trades={trades}
+            startExpanded={trades.length === 1}
+            emptyLabel="NO CLOSES THIS DAY"
+            onDelete={onDelete}
+          />
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ClosedBookBody({
   hydrated,
   trades,
   compact = false,
   emptyLabel = "NO CLOSED TRADES",
+  startExpanded = false,
+  onDelete,
 }: {
   hydrated: boolean;
   compact?: boolean;
   emptyLabel?: string;
+  startExpanded?: boolean;
   trades: ReturnType<typeof useDesk>["closedTrades"];
+  onDelete: (id: string) => void;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [expanded, setExpanded] = useState<Record<string, boolean>>(() =>
+    startExpanded
+      ? Object.fromEntries(trades.map((trade) => [trade.id, true]))
+      : {},
+  );
   const selected = trades.find((trade) => trade.id === openId) ?? null;
 
   if (!hydrated) {
@@ -533,6 +705,7 @@ function ClosedBookBody({
                 [trade.id]: !prev[trade.id],
               }))
             }
+            onDelete={() => onDelete(trade.id)}
           />
         ))}
       </ul>
@@ -555,12 +728,14 @@ function ClosedTradeCard({
   expanded,
   onOpen,
   onToggle,
+  onDelete,
 }: {
   trade: ReturnType<typeof useDesk>["closedTrades"][number];
   compact?: boolean;
   expanded: boolean;
   onOpen: () => void;
   onToggle: () => void;
+  onDelete: () => void;
 }) {
   const calc = calculateTrade(trade.calculator, trade.ticker);
   const input = trade.calculator;
@@ -586,19 +761,21 @@ function ClosedTradeCard({
 
   if (compact) {
     return (
-      <li>
+      <li
+        className={cn(
+          "flex overflow-hidden rounded-xl border bg-black/40 transition hover:border-gold/40",
+          won
+            ? "border-[#b6ff3b]/20"
+            : lost
+              ? "border-[#ff3b5c]/20"
+              : "border-white/8",
+        )}
+      >
         <button
           type="button"
           onClick={onOpen}
           aria-label={`Open ${trade.ticker || "trade"} details`}
-          className={cn(
-            "w-full rounded-xl border bg-black/40 px-2.5 py-2 text-left transition hover:border-gold/40",
-            won
-              ? "border-[#b6ff3b]/20"
-              : lost
-                ? "border-[#ff3b5c]/20"
-                : "border-white/8",
-          )}
+          className="min-w-0 flex-1 px-2.5 py-2 text-left"
         >
           <div className="flex items-start justify-between gap-2">
             <div className="flex min-w-0 items-center gap-2">
@@ -657,6 +834,14 @@ function ClosedTradeCard({
             {setupLine(input, calc.size, calc.sizeLabel, target, options)}
           </p>
         </button>
+        <button
+          type="button"
+          onClick={onDelete}
+          aria-label={`Delete ${trade.ticker || "trade"}`}
+          className="shrink-0 self-start p-2 text-muted-foreground transition hover:text-destructive"
+        >
+          <TrashIcon />
+        </button>
       </li>
     );
   }
@@ -678,12 +863,13 @@ function ClosedTradeCard({
               : "border-gold/35"),
       )}
     >
+      <div className="flex items-stretch">
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={expanded}
         aria-label={`${expanded ? "Collapse" : "Expand"} ${trade.ticker || "trade"}`}
-        className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-white/[0.03] sm:px-4"
+        className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-left hover:bg-white/[0.03] sm:px-4"
       >
         <DropChevron open={expanded} />
         <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
@@ -736,12 +922,42 @@ function ClosedTradeCard({
           </span>
         </span>
       </button>
+        <button
+          type="button"
+          onClick={onDelete}
+          aria-label={`Delete ${trade.ticker || "trade"}`}
+          className="shrink-0 self-center px-3 py-2 text-muted-foreground transition hover:text-destructive sm:px-4"
+        >
+          <TrashIcon />
+        </button>
+      </div>
       {expanded ? (
         <div className="border-t border-white/8 px-3 py-4 sm:px-4">
           <ClosedTicketData trade={trade} />
         </div>
       ) : null}
     </li>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="size-3.5"
+      aria-hidden
+    >
+      <path d="M3 6h18" />
+      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+      <line x1="10" x2="10" y1="11" y2="17" />
+      <line x1="14" x2="14" y1="11" y2="17" />
+    </svg>
   );
 }
 

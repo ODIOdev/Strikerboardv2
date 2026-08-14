@@ -1,6 +1,7 @@
 type MarketKind = "forex" | "stocks";
 
 const BELL_SRC = "/sounds/closing-bell.mp3";
+const ALERT_VOLUME = 0.28;
 
 let bell: HTMLAudioElement | null = null;
 
@@ -9,7 +10,7 @@ function getBell() {
   if (!bell) {
     bell = new Audio(BELL_SRC);
     bell.preload = "auto";
-    bell.volume = 1;
+    bell.volume = ALERT_VOLUME;
   }
   return bell;
 }
@@ -34,7 +35,7 @@ export async function playClosingBell() {
   audio.pause();
   audio.currentTime = 0;
   audio.muted = false;
-  audio.volume = 1;
+  audio.volume = ALERT_VOLUME;
   await audio.play();
 }
 
@@ -49,7 +50,7 @@ export function announceMarketOpen(kind: MarketKind) {
     const utter = new SpeechSynthesisUtterance(text);
     utter.rate = 0.95;
     utter.pitch = 1;
-    utter.volume = 1;
+    utter.volume = ALERT_VOLUME;
     const voices = window.speechSynthesis.getVoices();
     const voice =
       voices.find(
@@ -66,16 +67,4 @@ export function announceMarketOpen(kind: MarketKind) {
     });
   }
   speak();
-}
-
-export async function testMarketAlerts(kind: MarketKind) {
-  await unlockMarketAudio();
-  const audio = getBell();
-  if (!audio) return;
-  const after = () => {
-    audio.removeEventListener("ended", after);
-    announceMarketOpen(kind);
-  };
-  audio.addEventListener("ended", after);
-  await playClosingBell();
 }

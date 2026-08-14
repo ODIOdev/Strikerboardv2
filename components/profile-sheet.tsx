@@ -89,10 +89,12 @@ export function ProfileSheet({ utility = false }: ProfileSheetProps) {
           <span className="min-w-0 truncate">
             {label}
             {tag ? (
-              <span className="font-mono text-[10px] tracking-widest text-muted-foreground">
-                {" "}
-                - {tag}
-              </span>
+              <>
+                <span className="text-white/25"> · </span>
+                <span className="font-mono text-sm tracking-wide text-gold">
+                  {tag}
+                </span>
+              </>
             ) : null}
           </span>
         </button>

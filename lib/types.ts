@@ -73,6 +73,42 @@ export function isStructureCategory(category: unknown): boolean {
   return resolveCategory(category) === "Price Structure";
 }
 
+export function isNewsCategory(category: unknown): boolean {
+  return resolveCategory(category) === "News / Events";
+}
+
+export type NewsTone = "good" | "bad";
+
+export function clampSentiment(value: number): number {
+  if (!Number.isFinite(value)) return 50;
+  return Math.min(100, Math.max(0, value));
+}
+
+export function newsToneFromSentiment(sentiment: number): NewsTone {
+  return sentiment < 50 ? "bad" : "good";
+}
+
+export function biasFromNewsSentiment(sentiment: number): TfSide {
+  if (sentiment < 50) return "bearish";
+  if (sentiment > 50) return "bullish";
+  return "range";
+}
+
+export function newsFields(sentiment: number): {
+  sentiment: number;
+  newsTone: NewsTone;
+  biasByTf: TfBias;
+  weight: number;
+} {
+  const next = clampSentiment(sentiment);
+  return {
+    sentiment: next,
+    newsTone: newsToneFromSentiment(next),
+    biasByTf: createTfBias(biasFromNewsSentiment(next)),
+    weight: Math.round(next),
+  };
+}
+
 export type TfBias = Record<Timeframe, TfSide>;
 export type ZonePlay = "reaction" | "breakout";
 export type TfZone = Record<Timeframe, ZonePlay>;
@@ -95,6 +131,8 @@ export type Confluence = {
   candleConfirmed: boolean;
   biasByTf: TfBias;
   zoneByTf: TfZone;
+  newsTone?: NewsTone;
+  sentiment?: number;
 };
 
 export type BoardState = {
@@ -148,6 +186,7 @@ export type CalculatorResult = {
   rewardRisk: number;
   derivedTarget: number;
   usedRiskSize: boolean;
+  priceFactor: number;
 };
 
 export type TradeGroup = {
@@ -180,6 +219,7 @@ export type DeskState = {
   closedTrades: ClosedTrade[];
   recentTickers: string[];
   groups: TradeGroup[];
+  checklist: Confluence[];
 };
 
 export type Contribution = {

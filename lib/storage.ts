@@ -1,5 +1,9 @@
 import { createDefaultCalculator } from "./calculator";
-import { createEmptyDesk } from "./default-checklist";
+import {
+  createBlankConfluences,
+  createEmptyDesk,
+  toChecklistTemplate,
+} from "./default-checklist";
 import type {
   AccountCurrency,
   AssetClass,
@@ -20,7 +24,7 @@ import type {
   Wave,
   ZonePlay,
 } from "./types";
-import { createTfBias, createTfZone, resolveCategory } from "./types";
+import { createTfBias, createTfZone, resolveCategory, clampSentiment, isNewsCategory, newsToneFromSentiment } from "./types";
 
 const DESK_KEY = "striker-desk-v5";
 const PREV_DESK_KEYS = ["striker-desk-v4", "striker-desk-v3", "striker-desk-v2"];
@@ -142,6 +146,26 @@ function readTfBias(value: unknown, fallbackBias: Bias): TfBias {
   return createTfBias(bias);
 }
 
+function readNews(
+  raw: Record<string, unknown>,
+  biasByTf: TfBias,
+): { newsTone: "good" | "bad"; sentiment: number } {
+  if (typeof raw.sentiment === "number" && Number.isFinite(raw.sentiment)) {
+    const sentiment = clampSentiment(raw.sentiment);
+    const newsTone =
+      raw.newsTone === "bad" || raw.newsTone === "good"
+        ? raw.newsTone
+        : newsToneFromSentiment(sentiment);
+    return { sentiment, newsTone };
+  }
+  const sides = [biasByTf[5], biasByTf[15], biasByTf[30]];
+  const bear = sides.filter((side) => side === "bearish").length;
+  const bull = sides.filter((side) => side === "bullish").length;
+  if (bear > bull) return { newsTone: "bad", sentiment: 0 };
+  if (bull > bear) return { newsTone: "good", sentiment: 100 };
+  return { newsTone: "good", sentiment: 50 };
+}
+
 function normalizeConfluence(
   value: unknown,
   fallbackBias: Bias,
@@ -158,17 +182,22 @@ function normalizeConfluence(
     return null;
   }
 
+  const biasByTf = raw.biasByTf
+    ? readTfBias(raw.biasByTf, fallbackBias)
+    : createTfBias(isBias(raw.bias) ? raw.bias : fallbackBias);
+  const news = readNews(raw, biasByTf);
+
   return {
     id: raw.id,
     name: raw.name,
     category,
-    weight: raw.weight,
-    biasByTf: raw.biasByTf
-      ? readTfBias(raw.biasByTf, fallbackBias)
-      : createTfBias(isBias(raw.bias) ? raw.bias : fallbackBias),
+    weight: isNewsCategory(category) ? Math.round(news.sentiment) : raw.weight,
+    biasByTf,
     zoneByTf: readTfZone(raw.zoneByTf),
     active: raw.active !== false,
     candleConfirmed: raw.candleConfirmed === true,
+    newsTone: news.newsTone,
+    sentiment: news.sentiment,
   };
 }
 
@@ -256,11 +285,23 @@ function coerceDesk(value: unknown): DeskState | null {
         return trade ? [trade] : [];
       })
     : [];
+  const parsedChecklist = Array.isArray(raw.checklist)
+    ? raw.checklist.flatMap((item) => {
+        const next = normalizeConfluence(item, "bullish");
+        return next ? [next] : [];
+      })
+    : null;
+  const checklist = toChecklistTemplate(
+    parsedChecklist ??
+      trades[0]?.confluences ??
+      createBlankConfluences(),
+  );
   return {
     trades,
     closedTrades,
     recentTickers: raw.recentTickers as string[],
     groups,
+    checklist,
   };
 }
 
@@ -294,6 +335,12 @@ function migrateLegacyBoard(value: unknown): DeskState | null {
     ],
     closedTrades: [],
     groups: [],
+    checklist: toChecklistTemplate(
+      raw.confluences.flatMap((item) => {
+        const next = normalizeConfluence(item, raw.bias);
+        return next ? [next] : [];
+      }),
+    ),
   };
 }
 
@@ -302,8 +349,12 @@ export function loadDesk(): DeskState {
   try {
     const raw = window.localStorage.getItem(DESK_KEY);
     if (raw) {
-      const desk = coerceDesk(JSON.parse(raw));
-      if (desk) return desk;
+      const parsed = JSON.parse(raw) as { checklist?: unknown };
+      const desk = coerceDesk(parsed);
+      if (desk) {
+        if (!Array.isArray(parsed.checklist)) saveDesk(desk);
+        return desk;
+      }
     }
 
     for (const key of PREV_DESK_KEYS) {

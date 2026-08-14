@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import {
   categoryScore,
   formatScore,
   itemPoints,
+  newsSentiment,
   pointsLabel,
   ZONE_PLAY_POINTS,
 } from "@/lib/scoring";
@@ -23,8 +24,11 @@ import type {
 import {
   CATEGORIES,
   TIMEFRAMES,
-  isZoneCategory,
+  isNewsCategory,
   isStructureCategory,
+  isZoneCategory,
+  newsFields,
+  newsToneFromSentiment,
   resolveCategory,
 } from "@/lib/types";
 
@@ -79,7 +83,7 @@ export function ConfluenceBoard({
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    onAdd({ name, category, weight });
+    onAdd({ name, category, weight: clampWeight(String(weight)) });
     setOpen((prev) => ({ ...prev, [category]: true }));
     setName("");
     setWeight(8);
@@ -181,6 +185,10 @@ export function ConfluenceBoard({
                         const showCandleConfirm = isStructureCategory(
                           item.category,
                         );
+                        const showNews = isNewsCategory(item.category);
+                        const sentiment = newsSentiment(item);
+                        const newsTone =
+                          item.newsTone ?? newsToneFromSentiment(sentiment);
                         return (
                           <li
                             key={item.id}
@@ -217,7 +225,9 @@ export function ConfluenceBoard({
                                     WT{" "}
                                     {showZonePlay
                                       ? `${ZONE_PLAY_POINTS.reaction}/${ZONE_PLAY_POINTS.breakout}`
-                                      : item.weight}
+                                      : showNews
+                                        ? Math.round(sentiment)
+                                        : item.weight}
                                   </span>
                                 </button>
                               )}
@@ -238,6 +248,23 @@ export function ConfluenceBoard({
                               ) : null}
                             </div>
 
+                            {showNews ? (
+                              <SentimentSlide
+                                value={sentiment}
+                                onLive={(next) => {
+                                  const input = document.getElementById(
+                                    `news-wt-${item.id}`,
+                                  ) as HTMLInputElement | null;
+                                  if (input && input !== document.activeElement) {
+                                    input.value = String(Math.round(next));
+                                  }
+                                }}
+                                onChange={(next) =>
+                                  onPatch(item.id, newsFields(next))
+                                }
+                              />
+                            ) : null}
+
                             <div className="flex flex-wrap items-center gap-2">
                               <label className="flex items-center gap-1.5 font-mono text-[10px] tracking-widest text-muted-foreground">
                                 WT
@@ -247,20 +274,62 @@ export function ConfluenceBoard({
                                   </span>
                                 ) : (
                                   <input
+                                    id={showNews ? `news-wt-${item.id}` : undefined}
                                     type="number"
-                                    min={1}
+                                    min={showNews ? 0 : 1}
                                     max={100}
-                                    value={item.weight}
+                                    value={showNews ? Math.round(sentiment) : item.weight}
                                     onChange={(event) =>
-                                      onPatch(item.id, {
-                                        weight: clampWeight(event.target.value),
-                                      })
+                                      onPatch(
+                                        item.id,
+                                        showNews
+                                          ? newsFields(
+                                              Number(event.target.value) || 0,
+                                            )
+                                          : {
+                                              weight: clampWeight(
+                                                event.target.value,
+                                              ),
+                                            },
+                                      )
                                     }
-                                    className="h-7 w-14 rounded-md border border-white/10 bg-black/40 px-1 text-center text-foreground"
+                                    className="h-7 w-14 rounded-md border border-white/10 bg-black/40 px-1 text-center tabular-nums text-foreground"
                                   />
                                 )}
                               </label>
 
+                              {showNews ? (
+                                <div className="grid min-w-0 flex-1 grid-cols-2 overflow-hidden rounded-lg border border-white/10">
+                                  <button
+                                    type="button"
+                                    aria-pressed={newsTone === "bad"}
+                                    onClick={() =>
+                                      onPatch(item.id, newsFields(0))
+                                    }
+                                    className={`px-2 py-1.5 font-mono text-[10px] font-semibold tracking-widest ${
+                                      newsTone === "bad"
+                                        ? "bg-[#ff3b5c] text-white"
+                                        : "text-muted-foreground hover:text-foreground"
+                                    }`}
+                                  >
+                                    BAD NEWS
+                                  </button>
+                                  <button
+                                    type="button"
+                                    aria-pressed={newsTone === "good"}
+                                    onClick={() =>
+                                      onPatch(item.id, newsFields(100))
+                                    }
+                                    className={`px-2 py-1.5 font-mono text-[10px] font-semibold tracking-widest ${
+                                      newsTone === "good"
+                                        ? "bg-[#b6ff3b] text-[#0b1204]"
+                                        : "text-muted-foreground hover:text-foreground"
+                                    }`}
+                                  >
+                                    GOOD NEWS
+                                  </button>
+                                </div>
+                              ) : (
                               <div className="grid min-w-0 flex-1 grid-cols-3 gap-2">
                               {TIMEFRAMES.map((timeframe) => {
                                 const tfBias = item.biasByTf?.[timeframe] ?? "bullish";
@@ -366,6 +435,7 @@ export function ConfluenceBoard({
                                 );
                               })}
                               </div>
+                              )}
 
                               <div className="ml-auto flex items-center gap-2">
                                 <span className="font-mono text-xs text-gold">
@@ -423,10 +493,22 @@ export function ConfluenceBoard({
         </select>
         <input
           type="number"
-          min={1}
+          min={0}
           max={100}
           value={weight}
-          onChange={(event) => setWeight(Number(event.target.value) || 1)}
+          onFocus={(event) => {
+            const input = event.currentTarget;
+            setWeight(0);
+            requestAnimationFrame(() => input.select());
+          }}
+          onChange={(event) => {
+            const raw = event.target.value;
+            if (raw === "") {
+              setWeight(0);
+              return;
+            }
+            setWeight(Math.min(100, Math.max(0, Number(raw))));
+          }}
           className="h-8 w-full rounded-lg border border-white/10 bg-black/40 px-2 font-mono text-sm sm:w-[4.5rem]"
           aria-label="Weight"
         />
@@ -441,6 +523,147 @@ export function ConfluenceBoard({
 
 function clampWeight(value: string) {
   return Math.min(100, Math.max(1, Number(value) || 1));
+}
+
+function heatColor(value: number) {
+  if (value < 50) return "#ff3b5c";
+  if (value > 50) return "#b6ff3b";
+  return "#f4c430";
+}
+
+function SentimentSlide({
+  value,
+  onChange,
+  onLive,
+}: {
+  value: number;
+  onChange: (value: number) => void;
+  onLive?: (value: number) => void;
+}) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const thumbRef = useRef<HTMLSpanElement>(null);
+  const labelRef = useRef<HTMLSpanElement>(null);
+  const draggingRef = useRef(false);
+  const liveRef = useRef(value);
+  const onChangeRef = useRef(onChange);
+  const onLiveRef = useRef(onLive);
+  onChangeRef.current = onChange;
+  onLiveRef.current = onLive;
+
+  const paint = useCallback((next: number) => {
+    const v = Math.min(100, Math.max(0, next));
+    liveRef.current = v;
+    const track = trackRef.current;
+    const thumb = thumbRef.current;
+    if (track && thumb) {
+      const x = (v / 100) * track.clientWidth;
+      thumb.style.transform = `translate3d(${x}px, -50%, 0) translate3d(-50%, 0, 0)`;
+      const heat = heatColor(v);
+      thumb.style.background = heat;
+      thumb.style.boxShadow = `0 0 16px ${heat}`;
+      track.setAttribute("aria-valuenow", String(Math.round(v)));
+    }
+    if (labelRef.current) {
+      labelRef.current.textContent = String(Math.round(v)).padStart(3, "0");
+    }
+    onLiveRef.current?.(v);
+  }, []);
+
+  const readValue = useCallback((clientX: number) => {
+    const track = trackRef.current;
+    if (!track) return liveRef.current;
+    const rect = track.getBoundingClientRect();
+    if (rect.width <= 0) return liveRef.current;
+    return Math.min(100, Math.max(0, ((clientX - rect.left) / rect.width) * 100));
+  }, []);
+
+  const commit = useCallback(() => {
+    onChangeRef.current(Math.round(liveRef.current));
+  }, []);
+
+  useLayoutEffect(() => {
+    if (draggingRef.current) return;
+    paint(value);
+  }, [paint, value]);
+
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => paint(liveRef.current));
+    observer.observe(track);
+    return () => observer.disconnect();
+  }, [paint]);
+
+  return (
+    <div className="min-w-0">
+      <div className="mb-1.5 flex items-center justify-between font-mono text-[9px] tracking-widest">
+        <span className="text-[#ff3b5c]">BAD</span>
+        <span className="tabular-nums text-muted-foreground">
+          SENTIMENT{" "}
+          <span ref={labelRef}>{String(Math.round(value)).padStart(3, "0")}</span>
+        </span>
+        <span className="text-[#b6ff3b]">GOOD</span>
+      </div>
+      <div
+        ref={trackRef}
+        role="slider"
+        tabIndex={0}
+        aria-label="News sentiment"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(value)}
+        onPointerDown={(event) => {
+          event.preventDefault();
+          draggingRef.current = true;
+          event.currentTarget.setPointerCapture(event.pointerId);
+          paint(readValue(event.clientX));
+        }}
+        onPointerMove={(event) => {
+          if (!draggingRef.current) return;
+          paint(readValue(event.clientX));
+        }}
+        onPointerUp={(event) => {
+          if (!draggingRef.current) return;
+          draggingRef.current = false;
+          paint(readValue(event.clientX));
+          commit();
+        }}
+        onPointerCancel={() => {
+          if (!draggingRef.current) return;
+          draggingRef.current = false;
+          commit();
+        }}
+        onKeyDown={(event) => {
+          const step = event.shiftKey ? 10 : 1;
+          let next = liveRef.current;
+          if (event.key === "ArrowLeft" || event.key === "ArrowDown") next -= step;
+          else if (event.key === "ArrowRight" || event.key === "ArrowUp") next += step;
+          else if (event.key === "Home") next = 0;
+          else if (event.key === "End") next = 100;
+          else return;
+          event.preventDefault();
+          paint(next);
+          commit();
+        }}
+        className="relative h-10 cursor-ew-resize touch-none select-none outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
+      >
+        <div
+          className="absolute inset-x-0 top-1/2 h-3 -translate-y-1/2 rounded-full ring-1 ring-white/25"
+          style={{
+            background:
+              "linear-gradient(90deg, #ff3b5c 0%, #f4c430 50%, #b6ff3b 100%)",
+            boxShadow:
+              "inset 0 1px 2px rgb(0 0 0 / 45%), 0 0 0 1px rgb(0 0 0 / 40%)",
+          }}
+        />
+        <span className="pointer-events-none absolute inset-y-0 left-1/2 w-px bg-black/50" />
+        <span
+          ref={thumbRef}
+          className="pointer-events-none absolute top-1/2 left-0 z-10 size-5 rounded-full border-2 border-white will-change-transform"
+        />
+      </div>
+    </div>
+  );
 }
 
 function ConfluenceEditor({
@@ -475,11 +698,20 @@ function ConfluenceEditor({
           WT
           <input
             type="number"
-            min={1}
+            min={isNewsCategory(item.category) ? 0 : 1}
             max={100}
-            value={item.weight}
+            value={
+              isNewsCategory(item.category)
+                ? Math.round(item.sentiment ?? item.weight)
+                : item.weight
+            }
             onChange={(event) =>
-              onPatch(item.id, { weight: clampWeight(event.target.value) })
+              onPatch(
+                item.id,
+                isNewsCategory(item.category)
+                  ? newsFields(Number(event.target.value) || 0)
+                  : { weight: clampWeight(event.target.value) },
+              )
             }
             onKeyDown={(event) => {
               if (event.key === "Enter" || event.key === "Escape") onDone();

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useSyncExternalStore } from "react";
-import { createDefaultBoard } from "@/lib/default-checklist";
+import { createDefaultBoard, cloneChecklist } from "@/lib/default-checklist";
 import { createDefaultCalculator } from "@/lib/calculator";
 import {
   getDeskSnapshot,
@@ -22,7 +22,20 @@ import type {
   Wave,
   ZonePlay,
 } from "@/lib/types";
-import { createTfBias, createTfZone } from "@/lib/types";
+import { createTfBias, createTfZone, newsFields } from "@/lib/types";
+
+function isStructurePatch(patch: Partial<Omit<Confluence, "id">>) {
+  const keys = Object.keys(patch);
+  const live =
+    keys.includes("active") ||
+    keys.includes("candleConfirmed") ||
+    keys.includes("biasByTf") ||
+    keys.includes("zoneByTf") ||
+    keys.includes("sentiment") ||
+    keys.includes("newsTone");
+  if (live) return keys.includes("name") || keys.includes("category");
+  return keys.includes("name") || keys.includes("weight") || keys.includes("category");
+}
 
 function normalizeTicker(value: string): string {
   return value.trim().toUpperCase();
@@ -80,12 +93,16 @@ export function useBoard(tradeId: string) {
 
   const patchConfluence = useCallback(
     (id: string, patch: Partial<Omit<Confluence, "id">>) => {
-      writeTrade(tradeId, (prev) => ({
-        ...prev,
-        confluences: prev.confluences.map((item) =>
-          item.id === id ? { ...item, ...patch } : item,
-        ),
-      }));
+      writeTrade(
+        tradeId,
+        (prev) => ({
+          ...prev,
+          confluences: prev.confluences.map((item) =>
+            item.id === id ? { ...item, ...patch } : item,
+          ),
+        }),
+        { syncChecklist: isStructurePatch(patch) },
+      );
     },
     [tradeId],
   );
@@ -137,32 +154,46 @@ export function useBoard(tradeId: string) {
       const name = input.name.trim();
       if (!name) return;
       const weight = Math.min(100, Math.max(1, Math.round(input.weight)));
-      writeTrade(tradeId, (prev) => ({
-        ...prev,
-        confluences: [
-          ...prev.confluences,
-          {
-            id: crypto.randomUUID(),
-            name,
-            category: input.category,
-            weight,
-            biasByTf: createTfBias(prev.bias),
-            zoneByTf: createTfZone("reaction"),
-            active: false,
-            candleConfirmed: false,
-          },
-        ],
-      }));
+      writeTrade(
+        tradeId,
+        (prev) => ({
+          ...prev,
+          confluences: [
+            ...prev.confluences,
+            {
+              id: crypto.randomUUID(),
+              name,
+              category: input.category,
+              zoneByTf: createTfZone("reaction"),
+              active: false,
+              candleConfirmed: false,
+              ...(input.category === "News / Events"
+                ? newsFields(weight)
+                : {
+                    weight,
+                    biasByTf: createTfBias(prev.bias),
+                    newsTone: "good" as const,
+                    sentiment: 50,
+                  }),
+            },
+          ],
+        }),
+        { syncChecklist: true },
+      );
     },
     [tradeId],
   );
 
   const removeConfluence = useCallback(
     (id: string) => {
-      writeTrade(tradeId, (prev) => ({
-        ...prev,
-        confluences: prev.confluences.filter((item) => item.id !== id),
-      }));
+      writeTrade(
+        tradeId,
+        (prev) => ({
+          ...prev,
+          confluences: prev.confluences.filter((item) => item.id !== id),
+        }),
+        { syncChecklist: true },
+      );
     },
     [tradeId],
   );
@@ -193,7 +224,7 @@ export function useBoard(tradeId: string) {
   const restoreChecklist = useCallback(() => {
     writeTrade(tradeId, (prev) => ({
       ...prev,
-      confluences: createDefaultBoard().confluences,
+      confluences: cloneChecklist(getDeskSnapshot().checklist),
     }));
   }, [tradeId]);
 
@@ -202,7 +233,7 @@ export function useBoard(tradeId: string) {
   }, []);
 
   const wipeSession = useCallback(() => {
-    const fresh = createDefaultBoard();
+    const fresh = createDefaultBoard(getDeskSnapshot().checklist);
     writeTrade(tradeId, (prev) => ({
       ...prev,
       ticker: fresh.ticker,
