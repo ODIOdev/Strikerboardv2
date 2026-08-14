@@ -9,6 +9,8 @@ import {
 } from "./profile";
 import type { DeskState } from "./types";
 
+import { queueCloudPush } from "./supabase/queue";
+
 const USERS_KEY = "striker-users-v1";
 
 export type DeskUser = {
@@ -72,7 +74,17 @@ function writeUsers(next: UsersState) {
   if (typeof window !== "undefined") {
     window.localStorage.setItem(USERS_KEY, JSON.stringify(next));
   }
+  queueCloudPush();
   emit();
+}
+
+export function peekUsers(): UsersState {
+  if (loaded) return snapshot;
+  return readUsers() ?? EMPTY_USERS;
+}
+
+export function replaceUsersState(next: UsersState) {
+  writeUsers(next.users.length > 0 ? next : EMPTY_USERS);
 }
 
 function readUsers(): UsersState | null {

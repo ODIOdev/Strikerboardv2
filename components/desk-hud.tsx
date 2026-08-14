@@ -1,10 +1,11 @@
 "use client";
 
 import { useMemo } from "react";
+import Link from "next/link";
 import { deskStats, type DeskStats, type ScoredTrade } from "@/lib/desk-stats";
 import { money } from "@/lib/calculator";
 import { formatScore } from "@/lib/scoring";
-import { CATEGORY_SHORT, RAIL_CATEGORIES } from "@/lib/types";
+import { CATEGORY_SHORT, RAIL_CATEGORIES, type TfSide } from "@/lib/types";
 import {
   Tabs,
   TabsContent,
@@ -21,16 +22,19 @@ const BANDS = ["Prime", "Valid", "Watch"] as const;
 const RADIUS = 42;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
+const LEAD: Record<
+  TfSide | "even",
+  { label: string; color: string; side: string }
+> = {
+  bullish: { label: "BULL", color: "#b6ff3b", side: "LONG" },
+  bearish: { label: "BEAR", color: "#ff3b5c", side: "SHORT" },
+  range: { label: "RANGE", color: "#f4c430", side: "RANGE" },
+  even: { label: "EVEN", color: "#8b907c", side: "FLAT" },
+};
+
 export function DeskHud({ trades }: DeskHudProps) {
   const stats = useMemo(() => deskStats(trades), [trades]);
-  const leadLabel =
-    stats.lead === "bullish" ? "BULL" : stats.lead === "bearish" ? "BEAR" : "EVEN";
-  const leadColor =
-    stats.lead === "bullish"
-      ? "#b6ff3b"
-      : stats.lead === "bearish"
-        ? "#ff3b5c"
-        : "#8b907c";
+  const tone = LEAD[stats.lead];
 
   return (
     <div className="space-y-3">
@@ -45,7 +49,7 @@ export function DeskHud({ trades }: DeskHudProps) {
       </section>
 
       <section
-        data-bias={stats.lead === "even" ? "bullish" : stats.lead}
+        data-bias={stats.lead === "even" ? undefined : stats.lead}
         className="relative overflow-hidden rounded-2xl border border-white/8 bg-black/35 p-4"
       >
         <p className="font-mono text-[10px] tracking-[0.4em] text-muted-foreground">
@@ -55,12 +59,12 @@ export function DeskHud({ trades }: DeskHudProps) {
           <div>
             <p
               className="font-mono text-4xl font-black tracking-tighter"
-              style={{ color: leadColor, textShadow: `0 0 24px ${leadColor}` }}
+              style={{ color: tone.color, textShadow: `0 0 24px ${tone.color}` }}
             >
-              {leadLabel}
+              {tone.label}
             </p>
             <p className="mt-1 font-mono text-sm tracking-widest text-muted-foreground">
-              {stats.count === 0 ? "NO PRINTS" : `${stats.leadPct}% OF BOOK`}
+              {stats.count === 0 ? "NO OPEN TRADES" : `${stats.leadPct}% OPEN PRINTS`}
             </p>
           </div>
           <p className="font-mono text-4xl font-bold text-gold">
@@ -74,13 +78,18 @@ export function DeskHud({ trades }: DeskHudProps) {
             style={{ width: `${stats.bullPct}%` }}
           />
           <span
+            className="h-full bg-[#f4c430]"
+            style={{ width: `${stats.rangePct}%` }}
+          />
+          <span
             className="h-full bg-[#ff3b5c]"
             style={{ width: `${stats.bearPct}%` }}
           />
         </div>
         <p className="mt-2 font-mono text-[10px] tracking-widest text-muted-foreground">
-          {stats.bullish} LONG · {stats.bearish} SHORT
+          {stats.bullish} LONG · {stats.range} RANGE · {stats.bearish} SHORT
         </p>
+        <OpenTickers items={stats.sentiments} />
       </section>
 
       <section className="rounded-2xl border border-white/8 bg-black/35 p-4">
@@ -124,30 +133,23 @@ export function DeskHud({ trades }: DeskHudProps) {
                   strokeWidth="12"
                 />
                 {stats.count > 0 ? (
-                  <circle
-                    cx="60"
-                    cy="60"
-                    r={RADIUS}
-                    fill="none"
-                    stroke="#b6ff3b"
-                    strokeWidth="12"
-                    strokeDasharray={`${(stats.bullPct / 100) * CIRCUMFERENCE} ${CIRCUMFERENCE}`}
-                    strokeLinecap="butt"
-                    transform="rotate(-90 60 60)"
-                  />
-                ) : null}
-                {stats.count > 0 && stats.bearPct > 0 ? (
-                  <circle
-                    cx="60"
-                    cy="60"
-                    r={RADIUS}
-                    fill="none"
-                    stroke="#ff3b5c"
-                    strokeWidth="12"
-                    strokeDasharray={`${(stats.bearPct / 100) * CIRCUMFERENCE} ${CIRCUMFERENCE}`}
-                    strokeDashoffset={-((stats.bullPct / 100) * CIRCUMFERENCE)}
-                    transform="rotate(-90 60 60)"
-                  />
+                  <>
+                    <BiasArc
+                      color="#b6ff3b"
+                      pct={stats.bullPct}
+                      offset={0}
+                    />
+                    <BiasArc
+                      color="#f4c430"
+                      pct={stats.rangePct}
+                      offset={stats.bullPct}
+                    />
+                    <BiasArc
+                      color="#ff3b5c"
+                      pct={stats.bearPct}
+                      offset={stats.bullPct + stats.rangePct}
+                    />
+                  </>
                 ) : null}
                 <text
                   x="60"
@@ -155,7 +157,7 @@ export function DeskHud({ trades }: DeskHudProps) {
                   textAnchor="middle"
                   className="fill-gold font-mono text-[18px] font-bold"
                 >
-                  {formatScore(stats.avgScore)}
+                  {formatScore(stats.conviction)}
                 </text>
                 <text
                   x="60"
@@ -163,14 +165,16 @@ export function DeskHud({ trades }: DeskHudProps) {
                   textAnchor="middle"
                   className="fill-muted-foreground font-mono text-[7px] tracking-widest"
                 >
-                  AVG
+                  LEAN
                 </text>
               </svg>
               <div className="min-w-0 flex-1 space-y-2">
                 <BiasRow label="BULL" value={stats.bullPct} count={stats.bullish} color="#b6ff3b" />
+                <BiasRow label="RANGE" value={stats.rangePct} count={stats.range} color="#f4c430" />
                 <BiasRow label="BEAR" value={stats.bearPct} count={stats.bearish} color="#ff3b5c" />
               </div>
             </div>
+            <OpenTickers items={stats.sentiments} />
           </TabsContent>
 
           <TabsContent value="bands" className="mt-4 space-y-2">
@@ -331,6 +335,58 @@ function ExposureList({
                 style={{ width: `${pct}%`, background: color }}
               />
             </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function BiasArc({
+  color,
+  pct,
+  offset,
+}: {
+  color: string;
+  pct: number;
+  offset: number;
+}) {
+  if (pct <= 0) return null;
+  return (
+    <circle
+      cx="60"
+      cy="60"
+      r={RADIUS}
+      fill="none"
+      stroke={color}
+      strokeWidth="12"
+      strokeDasharray={`${(pct / 100) * CIRCUMFERENCE} ${CIRCUMFERENCE}`}
+      strokeDashoffset={-((offset / 100) * CIRCUMFERENCE)}
+      transform="rotate(-90 60 60)"
+    />
+  );
+}
+
+function OpenTickers({ items }: { items: DeskStats["sentiments"] }) {
+  if (items.length === 0) return null;
+  return (
+    <ul className="mt-3 flex flex-wrap gap-1.5">
+      {items.map((item) => {
+        const tone = LEAD[item.side];
+        return (
+          <li key={item.id}>
+            <Link
+              href={`/trade/${item.id}`}
+              className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 font-mono text-[10px] tracking-widest transition hover:brightness-125"
+              style={{
+                background: `${tone.color}22`,
+                color: tone.color,
+              }}
+            >
+              {item.ticker}
+              <span className="opacity-70">{tone.side}</span>
+              <span className="opacity-70">{formatScore(item.score)}</span>
+            </Link>
           </li>
         );
       })}

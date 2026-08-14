@@ -1,4 +1,5 @@
 import { dateKey } from "./calendar";
+import { queueCloudPush } from "./supabase/queue";
 
 const IDEAS_KEY = "striker-ideas-v2";
 const PREV_IDEAS_KEYS = ["striker-ideas-v1"];
@@ -69,6 +70,7 @@ export function saveIdeas(ideas: Idea[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(IDEAS_KEY, JSON.stringify(ideas));
   window.dispatchEvent(new Event(IDEAS_EVENT));
+  queueCloudPush();
 }
 
 export function removeIdeasByTicker(ticker: string) {

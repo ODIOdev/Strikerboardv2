@@ -2,6 +2,7 @@ import { createEmptyDesk, createTradeRecord } from "./default-checklist";
 import { calculateTrade, inferAssetClass, normalizeTicker } from "./calculator";
 import { csvToDesk } from "./csv";
 import { loadDesk, saveDesk } from "./storage";
+import { queueCloudPush } from "./supabase/queue";
 import type { ClosedTrade, DeskState, Trade, TradeOutcome } from "./types";
 
 const listeners = new Set<() => void>();
@@ -41,6 +42,7 @@ export function writeDesk(
   }
   snapshot = typeof next === "function" ? next(snapshot) : next;
   saveDesk(snapshot);
+  queueCloudPush();
   emit();
 }
 
@@ -210,6 +212,7 @@ export function resetDesk() {
   snapshot = createEmptyDesk();
   loaded = true;
   saveDesk(snapshot);
+  queueCloudPush();
   emit();
 }
 
@@ -217,5 +220,6 @@ export function replaceDesk(next: DeskState) {
   snapshot = next;
   loaded = true;
   saveDesk(snapshot);
+  queueCloudPush();
   emit();
 }

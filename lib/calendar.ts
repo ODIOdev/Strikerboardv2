@@ -1,6 +1,6 @@
 export type CalendarView = "day" | "week" | "month";
 
-export const WEEKDAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] as const;
+export const WEEKDAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"] as const;
 
 const MONTHS = [
   "JANUARY",
@@ -43,9 +43,7 @@ export function addMonths(date: Date, amount: number): Date {
 
 export function startOfWeek(date: Date): Date {
   const next = startOfDay(date);
-  const weekday = next.getDay();
-  const offset = weekday === 0 ? -6 : 1 - weekday;
-  return addDays(next, offset);
+  return addDays(next, -next.getDay());
 }
 
 export function weekDays(cursor: Date): Date[] {
@@ -88,8 +86,7 @@ export function formatWeekLabel(date: Date): string {
 }
 
 export function formatDayLabel(date: Date): string {
-  const weekday = WEEKDAYS[date.getDay() === 0 ? 6 : date.getDay() - 1];
-  return `${weekday} ${date.getDate()} ${MONTHS[date.getMonth()].slice(0, 3)} ${date.getFullYear()}`;
+  return `${WEEKDAYS[date.getDay()]} ${date.getDate()} ${MONTHS[date.getMonth()].slice(0, 3)} ${date.getFullYear()}`;
 }
 
 export function viewLabel(cursor: Date, view: CalendarView): string {

@@ -1,3 +1,5 @@
+import { queueCloudPush } from "./supabase/queue";
+
 export type DeskProfile = {
   name: string;
   handle: string;
@@ -62,6 +64,7 @@ export function saveProfile(profile: DeskProfile): DeskProfile {
   if (typeof window !== "undefined") {
     window.localStorage.setItem(PROFILE_KEY, JSON.stringify(next));
   }
+  queueCloudPush();
   emit();
   return next;
 }
@@ -72,5 +75,6 @@ export function resetProfile() {
   if (typeof window !== "undefined") {
     window.localStorage.removeItem(PROFILE_KEY);
   }
+  queueCloudPush();
   emit();
 }

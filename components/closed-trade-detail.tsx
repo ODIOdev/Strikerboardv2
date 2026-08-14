@@ -32,7 +32,7 @@ import {
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
-type ClosedScored = ClosedTrade & { result: ScoreResult };
+export type ClosedScored = ClosedTrade & { result: ScoreResult };
 
 const ASSET_LABEL = {
   forex: "FOREX",
@@ -77,6 +77,36 @@ export function ClosedTradeDetail({
 }
 
 function DetailBody({ trade }: { trade: ClosedScored }) {
+  const won = trade.outcome === "won";
+  const lost = trade.outcome === "lost";
+
+  return (
+    <>
+      <SheetHeader className="border-b border-white/8">
+        <p className="font-mono text-[10px] tracking-[0.35em] text-muted-foreground">
+          CLOSED TICKET
+        </p>
+        <SheetTitle className="font-mono text-2xl tracking-[0.16em]">
+          {trade.ticker || "UNTITLED"}
+        </SheetTitle>
+        <SheetDescription>
+          {formatStamp(trade.closedAt)}
+          {won ? " · Won" : lost ? " · Lost" : ""} · Grade {trade.result.grade}
+        </SheetDescription>
+      </SheetHeader>
+
+      <ClosedTicketData trade={trade} className="min-h-0 flex-1 overflow-y-auto px-4 pb-6" />
+    </>
+  );
+}
+
+export function ClosedTicketData({
+  trade,
+  className,
+}: {
+  trade: ClosedScored;
+  className?: string;
+}) {
   const calc = calculateTrade(trade.calculator, trade.ticker);
   const input = trade.calculator;
   const options = isStockOptions(input);
@@ -95,29 +125,15 @@ function DetailBody({ trade }: { trade: ClosedScored }) {
       : "SHORT";
 
   return (
-    <>
-      <SheetHeader className="border-b border-white/8">
-        <p className="font-mono text-[10px] tracking-[0.35em] text-muted-foreground">
-          CLOSED TICKET
-        </p>
-        <SheetTitle className="font-mono text-2xl tracking-[0.16em]">
-          {trade.ticker || "UNTITLED"}
-        </SheetTitle>
-        <SheetDescription>
-          {formatStamp(trade.closedAt)}
-          {won ? " · Won" : lost ? " · Lost" : ""} · Grade {trade.result.grade}
-        </SheetDescription>
-      </SheetHeader>
-
-      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 pb-6">
+      <div className={cn("space-y-5", className)}>
         <div className="flex flex-wrap items-center gap-2">
           {won || lost ? (
             <span
               className={cn(
-                "rounded-full px-2.5 py-1 font-mono text-[10px] tracking-widest",
+                "rounded-full px-3 py-1 font-mono text-[11px] font-black tracking-widest",
                 won
-                  ? "bg-[#b6ff3b]/15 text-[#b6ff3b]"
-                  : "bg-[#ff3b5c]/15 text-[#ff3b5c]",
+                  ? "bg-[#b6ff3b] text-[#0b1204] shadow-[0_0_16px_rgb(182_255_59/0.55)]"
+                  : "bg-[#ff3b5c] text-white shadow-[0_0_16px_rgb(255_59_92/0.55)]",
               )}
             >
               {won ? "WON" : "LOST"}
@@ -301,7 +317,6 @@ function DetailBody({ trade }: { trade: ClosedScored }) {
           </div>
         </section>
       </div>
-    </>
   );
 }
 

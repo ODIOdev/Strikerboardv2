@@ -28,10 +28,11 @@ import {
 } from "@/lib/calendar";
 import { IDEAS_EVENT, loadIdeas, saveIdeas, type Idea } from "@/lib/ideas";
 import { formatScore } from "@/lib/scoring";
+import { tradeSentiment, type ScoredTrade } from "@/lib/desk-stats";
 import { useDesk } from "@/hooks/use-desk";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { cn } from "@/lib/utils";
-import type { ScoredTrade } from "@/lib/desk-stats";
+import type { TfSide } from "@/lib/types";
 
 export function IdeasBoard() {
   const hydrated = useHydrated();
@@ -261,6 +262,7 @@ export function IdeasBoard() {
               todayKey={todayKey}
               byDate={byDate}
               tradesByDate={tradesByDate}
+              trades={trades}
               activeTickers={activeTickers}
               onSelect={openDay}
             />
@@ -312,17 +314,57 @@ export function IdeasBoard() {
   );
 }
 
+const SENTIMENT_TONE: Record<
+  TfSide | "even",
+  { color: string; dim: string; label: string; side: string }
+> = {
+  bullish: {
+    color: "#b6ff3b",
+    dim: "rgb(182 255 59 / 18%)",
+    label: "BULL",
+    side: "LONG",
+  },
+  bearish: {
+    color: "#ff3b5c",
+    dim: "rgb(255 59 92 / 18%)",
+    label: "BEAR",
+    side: "SHORT",
+  },
+  range: {
+    color: "#f4c430",
+    dim: "rgb(244 196 48 / 18%)",
+    label: "RANGE",
+    side: "RANGE",
+  },
+  even: {
+    color: "#8b907c",
+    dim: "rgb(139 144 124 / 16%)",
+    label: "FLAT",
+    side: "FLAT",
+  },
+};
+
 function dayChips(
   key: string,
   plans: Idea[],
   tradesByDate: Map<string, ScoredTrade[]>,
   activeTickers: Set<string>,
 ) {
-  const chips: { id: string; ticker: string; active: boolean }[] = [];
+  const chips: {
+    id: string;
+    ticker: string;
+    active: boolean;
+    side?: TfSide | "even";
+  }[] = [];
   const seen = new Set<string>();
   for (const trade of tradesByDate.get(key) ?? []) {
     const ticker = trade.ticker || "UNTITLED";
-    chips.push({ id: `t-${trade.id}`, ticker, active: true });
+    chips.push({
+      id: `t-${trade.id}`,
+      ticker,
+      active: true,
+      side: tradeSentiment(trade),
+    });
     if (trade.ticker) seen.add(trade.ticker);
   }
   for (const plan of plans) {
@@ -336,12 +378,157 @@ function dayChips(
   return chips;
 }
 
+function ActiveBiasMeter({ trades }: { trades: ScoredTrade[] }) {
+  const stats = useMemo(() => {
+    let long = 0;
+    let short = 0;
+    let range = 0;
+    const ticks: { id: string; ticker: string; side: TfSide | "even" }[] = [];
+    for (const trade of trades) {
+      const side = tradeSentiment(trade);
+      if (side === "bullish") long += 1;
+      else if (side === "bearish") short += 1;
+      else range += 1;
+      ticks.push({
+        id: trade.id,
+        ticker: trade.ticker || "UNTITLED",
+        side,
+      });
+    }
+    const total = trades.length;
+    const needle =
+      total === 0 ? 50 : ((long - short) / total) * 50 + 50;
+    let lead: TfSide | "even" = "even";
+    if (long > short && long >= range) lead = "bullish";
+    else if (short > long && short >= range) lead = "bearish";
+    else if (range > long && range > short) lead = "range";
+    else if (total > 0 && long === short) lead = range > 0 ? "range" : "even";
+    return { long, short, range, total, needle, lead, ticks };
+  }, [trades]);
+
+  const tone = SENTIMENT_TONE[stats.lead];
+  const valueText =
+    stats.total === 0
+      ? "No open trades"
+      : `${stats.long} long, ${stats.range} range, ${stats.short} short`;
+
+  return (
+    <div className="border-b border-white/8 px-4 py-3">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="font-mono text-[10px] tracking-[0.35em] text-muted-foreground">
+            ACTIVE BIAS
+          </p>
+          <p
+            className="mt-1 font-mono text-2xl font-black tracking-tighter"
+            style={{ color: tone.color, textShadow: `0 0 18px ${tone.color}` }}
+          >
+            {tone.label}
+          </p>
+        </div>
+        <p className="font-mono text-[10px] tracking-widest text-muted-foreground">
+          {stats.total === 0
+            ? "NO OPEN TRADES"
+            : `${stats.long} LONG · ${stats.range} RANGE · ${stats.short} SHORT`}
+        </p>
+      </div>
+
+      <div className="relative mt-5 pb-2 pt-7">
+        <div
+          role="meter"
+          aria-label="Active trade sentiment"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(stats.needle)}
+          aria-valuetext={valueText}
+          className="relative h-4 overflow-visible rounded-full ring-1 ring-white/30"
+          style={{
+            background:
+              "linear-gradient(90deg, #ff3b5c 0%, #f4c430 50%, #b6ff3b 100%)",
+            boxShadow:
+              "inset 0 1px 2px rgb(0 0 0 / 45%), 0 0 0 1px rgb(0 0 0 / 50%)",
+          }}
+        >
+          <span className="pointer-events-none absolute inset-y-0 left-1/2 w-px bg-black/50" />
+          <span
+            className="absolute top-1/2 z-10 -translate-x-1/2 -translate-y-1/2"
+            style={{
+              left: `clamp(0.9rem, ${stats.needle}%, calc(100% - 0.9rem))`,
+            }}
+          >
+            <span
+              className="absolute left-1/2 top-1/2 size-14 -translate-x-1/2 -translate-y-1/2 rounded-full blur-md"
+              style={{ background: tone.color, opacity: 0.55 }}
+            />
+            <span
+              className="absolute left-1/2 top-1/2 h-10 w-[3px] -translate-x-1/2 -translate-y-1/2 rounded-full"
+              style={{
+                background: tone.color,
+                boxShadow: `0 0 12px ${tone.color}`,
+              }}
+            />
+            <span
+              className="absolute left-1/2 -top-8 -translate-x-1/2 whitespace-nowrap rounded-md border-2 px-1.5 py-0.5 font-mono text-[9px] font-black tracking-[0.22em] text-black"
+              style={{
+                background: tone.color,
+                borderColor: "#fff",
+                boxShadow: `0 0 18px ${tone.color}`,
+              }}
+            >
+              {tone.side}
+            </span>
+            <span
+              className="relative flex size-8 items-center justify-center rounded-full border-[3px] border-white bg-[#07080c]"
+              style={{
+                boxShadow: `0 0 0 2px #000, 0 0 22px ${tone.color}`,
+              }}
+            >
+              <span
+                className="size-3 rounded-full"
+                style={{
+                  background: tone.color,
+                  boxShadow: `0 0 10px ${tone.color}`,
+                }}
+              />
+            </span>
+          </span>
+        </div>
+      </div>
+      <div className="mt-1.5 flex justify-between font-mono text-[9px] tracking-[0.28em] text-muted-foreground">
+        <span>SHORT</span>
+        <span>RANGE</span>
+        <span>LONG</span>
+      </div>
+
+      {stats.ticks.length > 0 ? (
+        <ul className="mt-3 flex flex-wrap gap-1.5">
+          {stats.ticks.map((tick) => {
+            const chip = SENTIMENT_TONE[tick.side];
+            return (
+              <li key={tick.id}>
+                <span
+                  className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 font-mono text-[10px] tracking-widest"
+                  style={{ background: chip.dim, color: chip.color }}
+                >
+                  {tick.ticker}
+                  <span className="opacity-70">{chip.side}</span>
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
 function MonthView({
   cursor,
   selected,
   todayKey,
   byDate,
   tradesByDate,
+  trades,
   activeTickers,
   onSelect,
 }: {
@@ -350,6 +537,7 @@ function MonthView({
   todayKey: string;
   byDate: Map<string, Idea[]>;
   tradesByDate: Map<string, ScoredTrade[]>;
+  trades: ScoredTrade[];
   activeTickers: Set<string>;
   onSelect: (date: Date) => void;
 }) {
@@ -357,6 +545,7 @@ function MonthView({
 
   return (
     <section className="overflow-hidden rounded-2xl border border-white/8 bg-black/35">
+      <ActiveBiasMeter trades={trades} />
       <div className="grid grid-cols-7 border-b border-white/8">
         {WEEKDAYS.map((day) => (
           <p
@@ -399,19 +588,27 @@ function MonthView({
                 {date.getDate()}
               </span>
               <span className="flex w-full flex-col gap-1">
-                {chips.slice(0, 3).map((chip) => (
-                  <span
-                    key={chip.id}
-                    className={cn(
-                      "truncate rounded-md px-1.5 py-0.5 font-mono text-[10px] tracking-widest",
-                      chip.active
-                        ? "bg-[#b6ff3b]/15 text-[#b6ff3b]"
-                        : "bg-black/50 text-gold",
-                    )}
-                  >
-                    {chip.ticker}
-                  </span>
-                ))}
+                {chips.slice(0, 3).map((chip) => {
+                  const side = chip.side;
+                  const tone = side ? SENTIMENT_TONE[side] : null;
+                  return (
+                    <span
+                      key={chip.id}
+                      className={cn(
+                        "truncate rounded-md px-1.5 py-0.5 font-mono text-[10px] tracking-widest",
+                        !tone && chip.active && "bg-[#b6ff3b]/15 text-[#b6ff3b]",
+                        !tone && !chip.active && "bg-black/50 text-gold",
+                      )}
+                      style={
+                        tone
+                          ? { background: tone.dim, color: tone.color }
+                          : undefined
+                      }
+                    >
+                      {chip.ticker}
+                    </span>
+                  );
+                })}
                 {extra > 0 ? (
                   <span className="px-1 font-mono text-[9px] tracking-widest text-muted-foreground">
                     +{extra}
@@ -472,7 +669,7 @@ function WeekView({
               className="flex w-full items-baseline justify-between"
             >
               <p className="font-mono text-[10px] tracking-[0.28em] text-muted-foreground">
-                {WEEKDAYS[date.getDay() === 0 ? 6 : date.getDay() - 1]}
+                {WEEKDAYS[date.getDay()]}
               </p>
               <span
                 className={cn(

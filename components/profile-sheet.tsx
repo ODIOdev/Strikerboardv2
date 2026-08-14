@@ -86,11 +86,12 @@ export function ProfileSheet({ utility = false }: ProfileSheetProps) {
           }
         >
           <CircleUser className="size-3.5 shrink-0 opacity-80" />
-          <span className="min-w-0">
-            <span className="block truncate">{label}</span>
+          <span className="min-w-0 truncate">
+            {label}
             {tag ? (
-              <span className="block truncate font-mono text-[10px] tracking-widest">
-                {tag}
+              <span className="font-mono text-[10px] tracking-widest text-muted-foreground">
+                {" "}
+                - {tag}
               </span>
             ) : null}
           </span>
