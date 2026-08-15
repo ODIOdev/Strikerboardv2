@@ -26,6 +26,8 @@ export const ZONE_PLAY_POINTS: Record<ZonePlay, number> = {
 };
 
 export const TF_SPAN = 0.8 + 0.9 + 1 + 1.1;
+export const GRADE_A_POINTS = 700;
+export const GRADE_B_POINTS = 525;
 
 function biasMap(item: Confluence) {
   return item.biasByTf ?? createTfBias("bullish");
@@ -54,6 +56,18 @@ export function bandFor(score: number): Band {
 export function gradeFor(score: number): Wave {
   if (score >= 80) return "A";
   if (score >= 60) return "B";
+  return "C";
+}
+
+export function setupBand(earned: number): Band {
+  if (earned >= GRADE_A_POINTS) return "Prime";
+  if (earned >= GRADE_B_POINTS) return "Valid";
+  return "Watch";
+}
+
+export function setupGrade(earned: number): Wave {
+  if (earned >= GRADE_A_POINTS) return "A";
+  if (earned >= GRADE_B_POINTS) return "B";
   return "C";
 }
 
@@ -214,8 +228,8 @@ export function scoreBoard(confluences: Confluence[]): ScoreResult {
   const max = live.reduce((sum, item) => sum + itemMax(item), 0);
   const earned = live.reduce((sum, item) => sum + itemPoints(item), 0);
   const score = max === 0 ? 0 : (earned / max) * 100;
-  const band = bandFor(score);
-  const grade = gradeFor(score);
+  const band = setupBand(earned);
+  const grade = setupGrade(earned);
 
   const byCategory = Object.fromEntries(
     CATEGORIES.map((category) => {

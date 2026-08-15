@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { formatScore } from "@/lib/scoring";
+import { GRADE_A_POINTS, pointsLabel } from "@/lib/scoring";
 import { GRADE_COLOR, type TfSide, type Wave } from "@/lib/types";
 
 type ScoreOrbProps = {
@@ -23,20 +23,21 @@ const BIAS_COLOR: Record<TfSide | "even", string> = {
   even: "#8b907c",
 };
 
-export function ScoreOrb({ score, grade, winning, earned, max }: ScoreOrbProps) {
+export function ScoreOrb({ grade, winning, earned, max }: ScoreOrbProps) {
   const [flash, setFlash] = useState(false);
-  const prev = useRef(score);
-  const offset = CIRCUMFERENCE - (Math.min(100, Math.max(0, score)) / 100) * CIRCUMFERENCE;
+  const prev = useRef(earned);
+  const ring = Math.min(100, (Math.max(0, earned) / GRADE_A_POINTS) * 100);
+  const offset = CIRCUMFERENCE - (ring / 100) * CIRCUMFERENCE;
 
   useEffect(() => {
-    if (prev.current < 80 && score >= 80) {
+    if (prev.current < GRADE_A_POINTS && earned >= GRADE_A_POINTS) {
       setFlash(true);
       const timer = window.setTimeout(() => setFlash(false), 700);
-      prev.current = score;
+      prev.current = earned;
       return () => window.clearTimeout(timer);
     }
-    prev.current = score;
-  }, [score]);
+    prev.current = earned;
+  }, [earned]);
 
   const gradeColor = GRADE_COLOR[grade];
   const biasColor = BIAS_COLOR[winning];
@@ -76,16 +77,16 @@ export function ScoreOrb({ score, grade, winning, earned, max }: ScoreOrbProps) 
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <motion.span
-            key={Math.round(score)}
+            key={Math.round(earned)}
             initial={{ scale: 0.86, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             className="font-mono text-4xl font-bold tracking-tight"
             style={{ color: biasColor }}
           >
-            {formatScore(score)}
+            {pointsLabel(earned)}
           </motion.span>
           <span className="font-mono text-[10px] tracking-[0.3em] text-muted-foreground">
-            / 100
+            / {GRADE_A_POINTS} A
           </span>
         </div>
       </div>

@@ -154,9 +154,9 @@ export function HomeSettings({ nav = false, utility = false }: HomeSettingsProps
               SCORE BANDS
             </p>
             <ul className="mt-2 space-y-1.5 font-mono text-xs text-muted-foreground">
-              <li>80+ Prime · Grade A</li>
-              <li>60–79 Valid · Grade B</li>
-              <li>Below 60 Watch · Grade C</li>
+              <li>700+ Prime · Grade A</li>
+              <li>525–699 Valid · Grade B</li>
+              <li>Below 525 Watch · Grade C</li>
             </ul>
           </section>
 

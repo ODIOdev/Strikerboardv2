@@ -62,9 +62,9 @@ export function SettingsSheet({
               SCORE BANDS
             </p>
             <ul className="mt-2 space-y-1.5 font-mono text-xs text-muted-foreground">
-              <li>80+ Prime</li>
-              <li>60–79 Valid</li>
-              <li>Below 60 Watch</li>
+              <li>700+ A</li>
+              <li>525–699 B</li>
+              <li>Below 525 C</li>
             </ul>
           </section>
 
