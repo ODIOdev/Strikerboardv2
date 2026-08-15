@@ -11,7 +11,7 @@ import {
 } from "@/lib/profile";
 import { getSupabase } from "@/lib/supabase/client";
 import type { DeskState } from "@/lib/types";
-import { deskPrintCount } from "@/lib/default-checklist";
+import { deskCoverage, deskPrintCount } from "@/lib/default-checklist";
 import { peekUsers, replaceUsersState, type UsersState } from "@/lib/users";
 
 const BOOK_ID = "striker-board";
@@ -132,6 +132,17 @@ export async function hydrateFromCloud() {
     }
     const remoteCount = deskPrintCount(remote.desk);
     const localCount = deskPrintCount(local.desk);
+    const remoteCoverage = deskCoverage(remote.desk);
+    const localCoverage = deskCoverage(local.desk);
+    if (remoteCoverage > localCoverage) {
+      apply(remote);
+      return;
+    }
+    if (localCoverage > remoteCoverage) {
+      touchStamp();
+      await pushCloud();
+      return;
+    }
     if (remoteCount > 0 && localCount === 0) {
       apply(remote);
       return;

@@ -20,10 +20,19 @@ function seed(
 }
 
 export const DEFAULT_CONFLUENCES: Confluence[] = [
+  seed("news-conflict", "No major news conflict", "News / Events", 8),
+  seed("news-window", "Event window is clear", "News / Events", 6),
+  seed("bias-htf", "HTF trend agrees with bias", "Market Bias", 10),
+  seed("bias-session", "Session bias agrees with HTF", "Market Bias", 8),
   seed("zone-major", "Major Zones", "Key Levels / Zones", 75),
   seed("struct-bos", "Break of Structure (BOS)", "Price Structure", 50),
   seed("struct-choch", "Change of Character (ChocH)", "Price Structure", 8),
+  seed("flow-volume", "Volume confirms the impulse", "Order Flow", 10),
+  seed("flow-delta", "Delta / absorption agrees", "Order Flow", 8),
   seed("mom-hidden", "Hidden Divergence", "Momentum", 75),
+  seed("entry-trigger", "Entry trigger printed", "Trend / Entry", 10),
+  seed("entry-inv", "Invalidation level defined", "Trend / Entry", 8),
+  seed("entry-rr", "R:R ≥ 2:1", "Trend / Entry", 8),
 ];
 
 export function toChecklistTemplate(items: Confluence[]): Confluence[] {
@@ -78,35 +87,38 @@ export function deskPrintCount(desk: DeskState): number {
   return checklist + open + closed;
 }
 
-function templateSource(desk: DeskState): Confluence[] {
-  if (Array.isArray(desk.checklist) && desk.checklist.length > 0) {
-    return desk.checklist;
+export function deskCoverage(desk: DeskState): number {
+  const names = new Set<string>();
+  for (const item of desk.checklist ?? []) names.add(item.name);
+  for (const trade of desk.trades ?? []) {
+    for (const item of trade.confluences ?? []) names.add(item.name);
   }
-  const fromTrade = (desk.trades ?? []).find((trade) => trade.confluences?.length);
-  if (fromTrade) return fromTrade.confluences;
-  const fromClosed = (desk.closedTrades ?? []).find(
-    (trade) => trade.confluences?.length,
-  );
-  if (fromClosed) return fromClosed.confluences;
-  return DEFAULT_CONFLUENCES;
+  return DEFAULT_CONFLUENCES.filter((item) => names.has(item.name)).length;
+}
+
+function mergeMissingDefaults(items: Confluence[] | undefined): Confluence[] {
+  const current = items ?? [];
+  const have = new Set(current.map((item) => item.name));
+  const missing = DEFAULT_CONFLUENCES.filter((item) => !have.has(item.name));
+  if (missing.length === 0) return current;
+  return [...current, ...cloneChecklist(missing)];
 }
 
 export function ensureDeskChecklist(desk: DeskState): DeskState {
-  const source = templateSource(desk);
-  const needChecklist =
-    !Array.isArray(desk.checklist) || desk.checklist.length === 0;
-  const trades = (desk.trades ?? []).map((trade) =>
-    trade.confluences?.length
+  const checklist = mergeMissingDefaults(desk.checklist);
+  const trades = (desk.trades ?? []).map((trade) => {
+    const confluences = mergeMissingDefaults(trade.confluences);
+    return confluences === trade.confluences
       ? trade
-      : { ...trade, confluences: cloneChecklist(source) },
-  );
+      : { ...trade, confluences };
+  });
   const tradesChanged = trades.some(
     (trade, index) => trade !== desk.trades[index],
   );
-  if (!needChecklist && !tradesChanged) return desk;
+  if (checklist === desk.checklist && !tradesChanged) return desk;
   return {
     ...desk,
-    checklist: needChecklist ? toChecklistTemplate(source) : desk.checklist,
+    checklist,
     trades,
   };
 }
