@@ -79,7 +79,7 @@ export function BiasHud({
       data-bias={
         overall.winning === "even" ? undefined : overall.winning
       }
-      className="relative isolate flex min-h-[260px] w-full flex-col overflow-hidden rounded-2xl border border-white/8 bg-black/35 text-left"
+      className="relative isolate flex min-h-0 min-w-0 w-full flex-col overflow-hidden rounded-2xl border border-white/8 bg-black/35 text-left md:col-span-2 md:min-h-[240px] xl:col-span-1"
     >
       <span className="absolute inset-0 desk-grid opacity-40" />
       <span
@@ -124,18 +124,18 @@ export function BiasHud({
           </span>
         </div>
 
-        <div className="flex flex-1 items-center justify-between gap-4">
+        <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
           <p
-            className="font-mono text-4xl font-black tracking-tighter text-white sm:text-5xl"
+            className="min-w-0 truncate font-mono text-4xl font-black tracking-tighter text-white xl:text-5xl"
             style={{ textShadow: "0 0 32px rgb(255 255 255 / 18%)" }}
           >
             +{pointsLabel(earned)}
           </p>
-          <div className="text-right">
+          <div className="shrink-0 text-right">
             <p className="font-mono text-[10px] tracking-[0.28em] text-muted-foreground">
               SESSION
             </p>
-            <p className="mt-1 font-mono text-2xl font-bold tabular-nums tracking-tight text-gold sm:text-3xl">
+            <p className="mt-1 font-mono text-xl font-bold tabular-nums tracking-tight text-gold xl:text-3xl">
               {now ? formatElapsed(startedAt, now) : "00:00:00"}
             </p>
           </div>
@@ -147,9 +147,9 @@ export function BiasHud({
           animate={{ y: 0, opacity: 1, filter: "blur(0px)" }}
           transition={{ duration: 0.35 }}
         >
-          <div className="flex items-end justify-between gap-3">
+          <div className="flex min-w-0 items-end justify-between gap-3">
             <h2
-              className="text-5xl font-black tracking-tighter sm:text-6xl"
+              className="min-w-0 truncate text-4xl font-black tracking-tighter xl:text-6xl"
               style={{
                 color: tone.color,
                 textShadow: `0 0 32px ${tone.dim}`,

@@ -70,7 +70,7 @@ export function StrikerDesk({ tradeId }: StrikerDeskProps) {
       <div className="relative flex min-h-screen flex-col">
         <TickerBar />
 
-        <main className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col gap-3 p-3 pb-6">
+        <main className="mx-auto flex w-full min-w-0 max-w-[1400px] flex-1 flex-col gap-3 overflow-x-hidden p-3 pb-6">
           <TradeCalculator
             tradeId={tradeId}
             ticker={trade.ticker}
@@ -78,7 +78,7 @@ export function StrikerDesk({ tradeId }: StrikerDeskProps) {
             onChange={board.patchCalculator}
             onTicker={board.setTicker}
           />
-          <div className="grid gap-3 lg:grid-cols-3">
+          <div className="grid min-w-0 grid-cols-1 items-stretch gap-3 md:grid-cols-2 xl:grid-cols-3">
             <BiasHud
               overall={result.overall}
               grade={result.grade}
@@ -103,7 +103,7 @@ export function StrikerDesk({ tradeId }: StrikerDeskProps) {
             />
           </div>
 
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.9fr)]">
+          <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.9fr)]">
             <ConfluenceBoard
               result={result}
               confluences={trade.confluences}
@@ -115,7 +115,7 @@ export function StrikerDesk({ tradeId }: StrikerDeskProps) {
               onRestore={board.restoreChecklist}
               onLoadList={board.loadChecklist}
             />
-            <div className="flex flex-col gap-3">
+            <div className="flex min-w-0 flex-col gap-3">
               <TradeTicket
                 ticker={trade.ticker}
                 winning={result.overall.winning}

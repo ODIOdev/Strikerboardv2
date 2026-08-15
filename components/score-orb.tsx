@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { GRADE_A_POINTS, pointsLabel } from "@/lib/scoring";
 import { GRADE_COLOR, type TfSide, type Wave } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 type ScoreOrbProps = {
   score: number;
@@ -28,6 +29,7 @@ export function ScoreOrb({ grade, winning, earned, max }: ScoreOrbProps) {
   const prev = useRef(earned);
   const ring = Math.min(100, (Math.max(0, earned) / GRADE_A_POINTS) * 100);
   const offset = CIRCUMFERENCE - (ring / 100) * CIRCUMFERENCE;
+  const label = pointsLabel(earned);
 
   useEffect(() => {
     if (prev.current < GRADE_A_POINTS && earned >= GRADE_A_POINTS) {
@@ -43,15 +45,15 @@ export function ScoreOrb({ grade, winning, earned, max }: ScoreOrbProps) {
   const biasColor = BIAS_COLOR[winning];
 
   return (
-    <div className="relative isolate hidden min-h-[220px] flex-col items-center justify-center overflow-hidden rounded-2xl border border-white/8 bg-black/35 p-4 lg:flex">
+    <div className="relative isolate hidden h-full min-h-0 min-w-0 flex-col items-center justify-center overflow-hidden rounded-2xl border border-white/8 bg-black/35 p-3 md:flex xl:p-4">
       {flash && (
         <div className="strike-flash pointer-events-none absolute inset-0 bg-gold/40" />
       )}
-      <p className="absolute top-4 left-4 font-mono text-[10px] tracking-[0.4em] text-muted-foreground">
+      <p className="w-full shrink-0 font-mono text-[10px] tracking-[0.35em] text-muted-foreground">
         CONVICTION
       </p>
-      <div className="relative">
-        <svg width="148" height="148" viewBox="0 0 148 148">
+      <div className="relative mx-auto aspect-square w-full min-h-0 max-w-[9.25rem]">
+        <svg viewBox="0 0 148 148" className="size-full">
           <circle
             cx="74"
             cy="74"
@@ -75,28 +77,31 @@ export function ScoreOrb({ grade, winning, earned, max }: ScoreOrbProps) {
             style={{ filter: `drop-shadow(0 0 10px ${biasColor})` }}
           />
         </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <div className="absolute inset-[24%] flex flex-col items-center justify-center gap-1.5 overflow-hidden text-center">
           <motion.span
-            key={Math.round(earned)}
+            key={label}
             initial={{ scale: 0.86, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="font-mono text-4xl font-bold tracking-tight"
+            className={cn(
+              "max-w-full font-mono font-bold leading-none tabular-nums tracking-tight",
+              label.length >= 6 ? "text-xl" : "text-2xl",
+            )}
             style={{ color: biasColor }}
           >
-            {pointsLabel(earned)}
+            {label}
           </motion.span>
-          <span className="font-mono text-[10px] tracking-[0.3em] text-muted-foreground">
+          <span className="font-mono text-[9px] leading-none tracking-widest text-muted-foreground">
             / {GRADE_A_POINTS} A
           </span>
         </div>
       </div>
       <div
-        className="mt-2 whitespace-nowrap rounded-full border px-3 py-0.5 font-mono text-[11px] tracking-[0.18em]"
+        className="mt-2 shrink-0 whitespace-nowrap rounded-full border px-3 py-0.5 font-mono text-[11px] tracking-[0.18em]"
         style={{ borderColor: gradeColor, color: gradeColor }}
       >
         {grade} TRADE
       </div>
-      <p className="mt-2 font-mono text-[10px] tracking-widest text-muted-foreground">
+      <p className="mt-1.5 shrink-0 font-mono text-[9px] tracking-widest whitespace-nowrap text-muted-foreground">
         {earned.toFixed(1)} / {max.toFixed(0)} PTS
       </p>
     </div>

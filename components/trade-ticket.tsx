@@ -28,7 +28,7 @@ export function TradeTicket({
   const symbol = ticker || "----";
 
   return (
-    <article className="relative overflow-hidden rounded-2xl border border-gold/25 bg-gradient-to-br from-gold/10 via-black/50 to-black/20 p-4">
+    <article className="relative min-w-0 overflow-hidden rounded-2xl border border-gold/25 bg-gradient-to-br from-gold/10 via-black/50 to-black/20 p-4">
       <p className="font-mono text-[10px] tracking-[0.4em] text-gold">TRADE TICKET</p>
       <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
         <div>

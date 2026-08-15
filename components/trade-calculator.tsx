@@ -232,7 +232,7 @@ export function TradeCalculator({
   }, [tradeId]);
 
   return (
-    <section className="hidden rounded-2xl border border-white/8 bg-black/35 p-4 lg:block">
+    <section className="hidden min-w-0 overflow-hidden rounded-2xl border border-white/8 bg-black/35 p-4 lg:block">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="font-mono text-[10px] tracking-[0.4em] text-muted-foreground">

@@ -257,8 +257,8 @@ export function StrikeWindow({ result }: StrikeWindowProps) {
   return (
     <div
       className={cn(
-        "relative isolate overflow-hidden rounded-2xl border border-white/8 bg-black/35",
-        "lg:min-h-[220px] lg:p-4",
+        "relative isolate min-w-0 overflow-hidden rounded-2xl border border-white/8 bg-black/35",
+        "md:min-h-[240px] md:p-4",
       )}
     >
       <span
@@ -270,7 +270,7 @@ export function StrikeWindow({ result }: StrikeWindowProps) {
         type="button"
         onClick={() => setOpen((prev) => !prev)}
         aria-expanded={open}
-        className="relative flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left lg:hidden"
+        className="relative flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left md:hidden"
       >
         <p className="font-mono text-[10px] tracking-[0.4em] text-muted-foreground">
           STRIKE WINDOW
@@ -304,22 +304,22 @@ export function StrikeWindow({ result }: StrikeWindowProps) {
 
       <div
         className={cn(
-          "relative p-4 pt-0 lg:block lg:p-0",
-          open ? "block border-t border-white/8 pt-4 lg:border-0 lg:pt-0" : "hidden",
+          "relative p-4 pt-0 md:block md:p-0",
+          open ? "block border-t border-white/8 pt-4 md:border-0 md:pt-0" : "hidden",
         )}
       >
       <div className="relative">
-        <p className="hidden font-mono text-[10px] tracking-[0.4em] text-muted-foreground lg:block">
+        <p className="hidden font-mono text-[10px] tracking-[0.4em] text-muted-foreground md:block">
           STRIKE WINDOW
         </p>
-        <p className="text-sm text-muted-foreground lg:mt-1">{copy}</p>
+        <p className="text-sm text-muted-foreground md:mt-1">{copy}</p>
       </div>
 
       <motion.h2
         key={side.label}
         initial={{ y: 10, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        className="relative mt-4 w-fit text-5xl font-black tracking-tighter sm:text-6xl"
+        className="relative mt-4 w-fit max-w-full truncate text-4xl font-black tracking-tighter xl:text-6xl"
         style={{ color: side.color, textShadow: `0 0 32px ${side.dim}` }}
       >
         {side.label}

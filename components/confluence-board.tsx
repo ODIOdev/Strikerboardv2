@@ -104,7 +104,7 @@ export function ConfluenceBoard({
   }
 
   return (
-    <section className="rounded-2xl border border-white/8 bg-black/35 p-3 lg:p-4">
+    <section className="min-w-0 overflow-hidden rounded-2xl border border-white/8 bg-black/35 p-3 lg:p-4">
       <div className="mb-3 flex flex-wrap items-end justify-between gap-2 lg:mb-4 lg:gap-3">
         <div>
           <p className="font-mono text-[10px] tracking-[0.4em] text-muted-foreground">

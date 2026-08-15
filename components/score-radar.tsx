@@ -47,7 +47,7 @@ export function ScoreRadar({ result }: ScoreRadarProps) {
   const top = result.contributions.slice(0, 6);
 
   return (
-    <section className="rounded-2xl border border-white/8 bg-black/35 p-4">
+    <section className="min-w-0 overflow-hidden rounded-2xl border border-white/8 bg-black/35 p-4">
       <p className="font-mono text-[10px] tracking-[0.4em] text-muted-foreground">
         INFOGRAPHICS
       </p>
