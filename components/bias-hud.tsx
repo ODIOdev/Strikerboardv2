@@ -1,16 +1,23 @@
 "use client";
 
+import { FormEvent, useState } from "react";
 import { motion } from "framer-motion";
+import { Input } from "@/components/ui/input";
 import { pointsLabel } from "@/lib/scoring";
 import { formatElapsed } from "@/lib/time";
 import { useNow } from "@/hooks/use-now";
-import { GRADE_COLOR, WAVES, type OverallBias, type TfSide, type Wave } from "@/lib/types";
+import { GRADE_COLOR, WAVES, type CalculatorInput, type OverallBias, type TfSide, type Wave } from "@/lib/types";
+import { CloseTradeControl } from "@/components/strike-window";
 
 type BiasHudProps = {
   overall: OverallBias;
   grade: Wave;
   earned: number;
   startedAt: number;
+  ticker: string;
+  calculator: CalculatorInput;
+  onTicker: (ticker: string) => void;
+  onClose: (exitPrice: number) => void;
 };
 
 const TONE: Record<
@@ -43,8 +50,23 @@ const TONE: Record<
   },
 };
 
-export function BiasHud({ overall, grade, earned, startedAt }: BiasHudProps) {
+export function BiasHud({
+  overall,
+  grade,
+  earned,
+  startedAt,
+  ticker,
+  calculator,
+  onTicker,
+  onClose,
+}: BiasHudProps) {
   const now = useNow();
+  const [draft, setDraft] = useState(ticker);
+  const [seenTicker, setSeenTicker] = useState(ticker);
+  if (ticker !== seenTicker) {
+    setSeenTicker(ticker);
+    setDraft(ticker);
+  }
   const tone = TONE[overall.winning];
   const total =
     overall.longEarned + overall.shortEarned + overall.rangeEarned;
@@ -67,10 +89,33 @@ export function BiasHud({ overall, grade, earned, startedAt }: BiasHudProps) {
       <span className="scanlines absolute inset-0 opacity-40" />
 
       <div className="relative z-10 flex w-full flex-1 flex-col gap-4 p-5">
-        <div className="flex items-center justify-between">
-          <p className="font-mono text-xs tracking-[0.4em] text-muted-foreground sm:text-sm">
+        <div className="flex items-center justify-between gap-3">
+          <p className="hidden font-mono text-xs tracking-[0.4em] text-muted-foreground sm:text-sm lg:block">
             TRADE BIAS
           </p>
+          <form
+            className="min-w-0 flex-1 lg:hidden"
+            onSubmit={(event: FormEvent) => {
+              event.preventDefault();
+              onTicker(draft);
+            }}
+          >
+            <div className="relative max-w-[11rem]">
+              <Input
+                value={draft}
+                onChange={(event) => setDraft(event.target.value.toUpperCase())}
+                placeholder="TICKER"
+                aria-label="Ticker"
+                className="h-8 border-white/10 bg-black/40 pr-12 font-mono text-sm font-semibold tracking-[0.22em] uppercase"
+              />
+              <button
+                type="submit"
+                className="absolute top-1/2 right-1 h-6 -translate-y-1/2 rounded-md bg-gold px-1.5 font-mono text-[9px] font-bold tracking-widest text-[#0b1204]"
+              >
+                GO
+              </button>
+            </div>
+          </form>
           <span
             className="rounded-full border border-white/10 bg-black/40 px-3 py-1 font-mono text-xs tracking-widest sm:text-sm"
             style={{ color: tone.color }}
@@ -176,6 +221,12 @@ export function BiasHud({ overall, grade, earned, startedAt }: BiasHudProps) {
             />
           </div>
         </motion.div>
+        <CloseTradeControl
+          ticker={ticker}
+          calculator={calculator}
+          onClose={onClose}
+          className="mt-auto"
+        />
       </div>
     </section>
   );

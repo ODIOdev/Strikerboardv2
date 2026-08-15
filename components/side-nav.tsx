@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   useEffect,
   useRef,
@@ -28,6 +28,7 @@ import { ClosedBookPreview } from "@/components/closed-book";
 import { useDesk } from "@/hooks/use-desk";
 import { HomeSettings } from "@/components/home-settings";
 import { ProfileSheet } from "@/components/profile-sheet";
+import { logout } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 function CalendarIcon({ className }: { className?: string }) {
@@ -188,6 +189,37 @@ function NavLink({
   return <SheetClose asChild>{link}</SheetClose>;
 }
 
+function LogoutButton() {
+  const router = useRouter();
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        logout();
+        router.replace("/login");
+      }}
+      className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-muted-foreground transition hover:bg-white/[0.05] hover:text-foreground"
+    >
+      <svg
+        viewBox="0 0 24 24"
+        className="size-3.5 shrink-0 opacity-80"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+      >
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+        <polyline points="16 17 21 12 16 7" />
+        <line x1="21" x2="9" y1="12" y2="12" />
+      </svg>
+      Log out
+    </button>
+  );
+}
+
 function NavPanel({ closeOnNavigate = false }: { closeOnNavigate?: boolean }) {
   const pathname = usePathname();
   const { hydrated, trades } = useDesk();
@@ -301,6 +333,8 @@ function NavPanel({ closeOnNavigate = false }: { closeOnNavigate?: boolean }) {
           <ProfileSheet utility />
           <div className="h-px bg-white/8" />
           <HomeSettings utility />
+          <div className="h-px bg-white/8" />
+          <LogoutButton />
         </div>
       </section>
     </nav>
@@ -343,6 +377,8 @@ export function MobileNav() {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  if (pathname === "/login") return <>{children}</>;
   return (
     <div className="flex min-h-screen">
       <SideNav />

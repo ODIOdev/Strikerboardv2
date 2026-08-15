@@ -84,17 +84,16 @@ export function StrikerDesk({ tradeId }: StrikerDeskProps) {
               grade={result.grade}
               earned={result.earned}
               startedAt={trade.createdAt}
-            />
-            <StrikeWindow
-              result={result}
               ticker={trade.ticker}
               calculator={trade.calculator}
+              onTicker={board.setTicker}
               onClose={(exitPrice) => {
                 closeTrade(tradeId, exitPrice);
                 if (trade.ticker) removeIdeasByTicker(trade.ticker);
                 router.replace("/");
               }}
             />
+            <StrikeWindow result={result} />
             <ScoreOrb
               score={result.score}
               grade={result.grade}

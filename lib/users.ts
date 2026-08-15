@@ -211,6 +211,8 @@ export function resetUsers() {
 }
 
 export function userLabel(user: DeskUser) {
-  const handle = user.profile.handle.trim();
-  return handle ? `${labelOf(user)} · @${handle}` : labelOf(user);
+  const handle = user.profile.handle.trim().replace(/^@+/, "").split("@")[0] ?? "";
+  if (!handle) return labelOf(user);
+  const tag = handle === "admin" ? handle : `@${handle}`;
+  return `${labelOf(user)} · ${tag}`;
 }

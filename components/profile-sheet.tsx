@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState, useSyncExternalStore } from "react";
+import { useRouter } from "next/navigation";
 import { CircleUser } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +19,12 @@ import {
   saveProfile,
   subscribeProfile,
 } from "@/lib/profile";
+import {
+  getAuthSnapshot,
+  getServerAuthSnapshot,
+  logout,
+  subscribeAuth,
+} from "@/lib/auth";
 import {
   createUser,
   getServerUsersSnapshot,
@@ -43,6 +50,12 @@ export function ProfileSheet({ utility = false }: ProfileSheetProps) {
     getUsersSnapshot,
     getServerUsersSnapshot,
   );
+  const session = useSyncExternalStore(
+    subscribeAuth,
+    getAuthSnapshot,
+    getServerAuthSnapshot,
+  );
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(profile.name);
   const [handle, setHandle] = useState(profile.handle);
@@ -63,7 +76,12 @@ export function ProfileSheet({ utility = false }: ProfileSheetProps) {
   }
 
   const label = profile.name || "Profile";
-  const tag = profile.handle ? `@${profile.handle}` : null;
+  const rawHandle = profile.handle.replace(/^@+/, "").split("@")[0] ?? "";
+  const tag = rawHandle
+    ? session?.role === "admin" || rawHandle === "admin"
+      ? rawHandle
+      : `@${rawHandle}`
+    : null;
 
   return (
     <Sheet
@@ -208,6 +226,23 @@ export function ProfileSheet({ utility = false }: ProfileSheetProps) {
                 })
               )}
             </ul>
+          ) : null}
+          <Button
+            type="button"
+            variant="outline"
+            className="border-white/10 font-mono text-[10px] tracking-widest"
+            onClick={() => {
+              logout();
+              setOpen(false);
+              router.replace("/login");
+            }}
+          >
+            SIGN OUT
+          </Button>
+          {session?.role === "admin" ? (
+            <p className="font-mono text-[10px] tracking-widest text-gold">
+              MASTER ADMIN
+            </p>
           ) : null}
         </form>
       </SheetContent>

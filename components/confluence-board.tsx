@@ -94,13 +94,15 @@ export function ConfluenceBoard({
   }
 
   return (
-    <section className="rounded-2xl border border-white/8 bg-black/35 p-4">
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+    <section className="rounded-2xl border border-white/8 bg-black/35 p-3 lg:p-4">
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-2 lg:mb-4 lg:gap-3">
         <div>
           <p className="font-mono text-[10px] tracking-[0.4em] text-muted-foreground">
             CONFLUENCE BOARD
           </p>
-          <h2 className="text-xl font-semibold tracking-tight">Weighted checklist</h2>
+          <h2 className="hidden text-xl font-semibold tracking-tight lg:block">
+            Weighted checklist
+          </h2>
         </div>
         <Button type="button" size="sm" variant="outline" onClick={onRestore}>
           Reset checklist
@@ -134,7 +136,7 @@ export function ConfluenceBoard({
                 type="button"
                 onClick={() => toggle(group)}
                 aria-expanded={expanded}
-                className="flex w-full items-center gap-3 px-3 py-2.5 text-left"
+                className="flex w-full items-center gap-2 px-2.5 py-2 text-left lg:gap-3 lg:px-3 lg:py-2.5"
               >
                 <ChevronRight
                   className={`size-3.5 shrink-0 text-muted-foreground transition-transform ${
@@ -172,13 +174,13 @@ export function ConfluenceBoard({
               </div>
 
               {expanded ? (
-                <div className="border-t border-white/8 px-3 py-2">
+                <div className="border-t border-white/8 px-2 py-1.5 lg:px-3 lg:py-2">
                   {rows.length === 0 ? (
                     <p className="px-1 py-2 font-mono text-[10px] tracking-widest text-muted-foreground">
                       NO PRINTS · {bandFor(score).toUpperCase()}
                     </p>
                   ) : (
-                    <ul className="space-y-1.5">
+                    <ul className="space-y-1 lg:space-y-1.5">
                       {rows.map((item) => {
                         const earned = itemPoints(item);
                         const showZonePlay = isZoneCategory(item.category);
@@ -192,7 +194,7 @@ export function ConfluenceBoard({
                         return (
                           <li
                             key={item.id}
-                            className={`grid grid-cols-1 items-center gap-2 rounded-xl border border-white/6 bg-black/20 px-3 py-2 ${
+                            className={`grid grid-cols-1 items-center gap-1.5 rounded-xl border border-white/6 bg-black/20 px-2 py-1.5 lg:gap-2 lg:px-3 lg:py-2 ${
                               item.active || editingId === item.id ? "" : "opacity-45"
                             }`}
                           >
@@ -243,7 +245,10 @@ export function ConfluenceBoard({
                                     }
                                     className="size-3.5 rounded border-white/20 bg-black/40 accent-[#4de8c8]"
                                   />
-                                  Confirmed new candle
+                                  <span className="lg:hidden">CANDLE</span>
+                                  <span className="hidden lg:inline">
+                                    Confirmed new candle
+                                  </span>
                                 </label>
                               ) : null}
                             </div>
@@ -265,8 +270,12 @@ export function ConfluenceBoard({
                               />
                             ) : null}
 
-                            <div className="flex flex-wrap items-center gap-2">
-                              <label className="flex items-center gap-1.5 font-mono text-[10px] tracking-widest text-muted-foreground">
+                            <div className="flex flex-wrap items-center gap-1.5 lg:gap-2">
+                              <label
+                                className={`items-center gap-1.5 font-mono text-[10px] tracking-widest text-muted-foreground ${
+                                  showNews ? "hidden lg:flex" : "flex"
+                                }`}
+                              >
                                 WT
                                 {showZonePlay ? (
                                   <span className="inline-flex h-7 w-14 items-center justify-center rounded-md border border-white/10 bg-black/40 text-[9px] tracking-wide text-foreground">
@@ -306,13 +315,14 @@ export function ConfluenceBoard({
                                     onClick={() =>
                                       onPatch(item.id, newsFields(0))
                                     }
-                                    className={`px-2 py-1.5 font-mono text-[10px] font-semibold tracking-widest ${
+                                    className={`px-2 py-1 font-mono text-[10px] font-semibold tracking-widest lg:py-1.5 ${
                                       newsTone === "bad"
                                         ? "bg-[#ff3b5c] text-white"
                                         : "text-muted-foreground hover:text-foreground"
                                     }`}
                                   >
-                                    BAD NEWS
+                                    <span className="lg:hidden">BAD</span>
+                                    <span className="hidden lg:inline">BAD NEWS</span>
                                   </button>
                                   <button
                                     type="button"
@@ -320,17 +330,18 @@ export function ConfluenceBoard({
                                     onClick={() =>
                                       onPatch(item.id, newsFields(100))
                                     }
-                                    className={`px-2 py-1.5 font-mono text-[10px] font-semibold tracking-widest ${
+                                    className={`px-2 py-1 font-mono text-[10px] font-semibold tracking-widest lg:py-1.5 ${
                                       newsTone === "good"
                                         ? "bg-[#b6ff3b] text-[#0b1204]"
                                         : "text-muted-foreground hover:text-foreground"
                                     }`}
                                   >
-                                    GOOD NEWS
+                                    <span className="lg:hidden">GOOD</span>
+                                    <span className="hidden lg:inline">GOOD NEWS</span>
                                   </button>
                                 </div>
                               ) : (
-                              <div className="grid min-w-0 flex-1 grid-cols-3 gap-2">
+                              <div className="grid min-w-0 flex-1 grid-cols-3 gap-1 lg:gap-2">
                               {TIMEFRAMES.map((timeframe) => {
                                 const tfBias = item.biasByTf?.[timeframe] ?? "bullish";
                                 const zonePlay =
@@ -357,7 +368,8 @@ export function ConfluenceBoard({
                                             : "text-muted-foreground hover:text-foreground"
                                         }`}
                                       >
-                                        LONG
+                                        <span className="lg:hidden">L</span>
+                                        <span className="hidden lg:inline">LONG</span>
                                       </button>
                                       <button
                                         type="button"
@@ -370,7 +382,8 @@ export function ConfluenceBoard({
                                             : "text-muted-foreground hover:text-foreground"
                                         }`}
                                       >
-                                        SHORT
+                                        <span className="lg:hidden">S</span>
+                                        <span className="hidden lg:inline">SHORT</span>
                                       </button>
                                       <button
                                         type="button"
@@ -383,7 +396,8 @@ export function ConfluenceBoard({
                                             : "text-muted-foreground hover:text-foreground"
                                         }`}
                                       >
-                                        RANGE
+                                        <span className="lg:hidden">R</span>
+                                        <span className="hidden lg:inline">RANGE</span>
                                       </button>
                                     </div>
                                     {showZonePlay ? (
@@ -408,7 +422,10 @@ export function ConfluenceBoard({
                                               : "text-muted-foreground hover:text-foreground"
                                           }`}
                                         >
-                                          REACTION
+                                          <span className="lg:hidden">RXN</span>
+                                          <span className="hidden lg:inline">
+                                            REACTION
+                                          </span>
                                         </button>
                                         <button
                                           type="button"
@@ -427,7 +444,10 @@ export function ConfluenceBoard({
                                               : "text-muted-foreground hover:text-foreground"
                                           }`}
                                         >
-                                          BREAKOUT
+                                          <span className="lg:hidden">BO</span>
+                                          <span className="hidden lg:inline">
+                                            BREAKOUT
+                                          </span>
                                         </button>
                                       </div>
                                     ) : null}
@@ -470,7 +490,7 @@ export function ConfluenceBoard({
 
       <form
         onSubmit={submit}
-        className="mt-5 grid grid-cols-1 gap-2 border-t border-white/8 pt-4 sm:grid-cols-[1fr_auto_auto_auto]"
+        className="mt-3 grid grid-cols-1 gap-2 border-t border-white/8 pt-3 lg:mt-5 lg:pt-4 sm:grid-cols-[1fr_auto_auto_auto]"
       >
         <Input
           value={name}
@@ -596,7 +616,7 @@ function SentimentSlide({
 
   return (
     <div className="min-w-0">
-      <div className="mb-1.5 flex items-center justify-between font-mono text-[9px] tracking-widest">
+      <div className="mb-0.5 flex items-center justify-between font-mono text-[9px] tracking-widest lg:mb-1.5">
         <span className="text-[#ff3b5c]">BAD</span>
         <span className="tabular-nums text-muted-foreground">
           SENTIMENT{" "}
@@ -645,10 +665,10 @@ function SentimentSlide({
           paint(next);
           commit();
         }}
-        className="relative h-10 cursor-ew-resize touch-none select-none outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
+        className="relative h-7 cursor-ew-resize touch-none select-none outline-none focus-visible:ring-2 focus-visible:ring-gold/50 lg:h-10"
       >
         <div
-          className="absolute inset-x-0 top-1/2 h-3 -translate-y-1/2 rounded-full ring-1 ring-white/25"
+          className="absolute inset-x-0 top-1/2 h-2 -translate-y-1/2 rounded-full ring-1 ring-white/25 lg:h-3"
           style={{
             background:
               "linear-gradient(90deg, #ff3b5c 0%, #f4c430 50%, #b6ff3b 100%)",
@@ -659,7 +679,7 @@ function SentimentSlide({
         <span className="pointer-events-none absolute inset-y-0 left-1/2 w-px bg-black/50" />
         <span
           ref={thumbRef}
-          className="pointer-events-none absolute top-1/2 left-0 z-10 size-5 rounded-full border-2 border-white will-change-transform"
+          className="pointer-events-none absolute top-1/2 left-0 z-10 size-3.5 rounded-full border-2 border-white will-change-transform lg:size-5"
         />
       </div>
     </div>

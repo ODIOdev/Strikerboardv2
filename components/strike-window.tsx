@@ -21,12 +21,17 @@ import {
 import { categoryScore } from "@/lib/scoring";
 import type { Band, CalculatorInput, ScoreResult, TfSide } from "@/lib/types";
 import { CATEGORY_SHORT, RAIL_CATEGORIES } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
-type StrikeWindowProps = {
-  result: ScoreResult;
+type CloseTradeControlProps = {
   ticker: string;
   calculator: CalculatorInput;
   onClose: (exitPrice: number) => void;
+  className?: string;
+};
+
+type StrikeWindowProps = {
+  result: ScoreResult;
 };
 
 const SIDE: Record<
@@ -82,20 +87,14 @@ function pipColor(winning: TfSide | "even", score: number) {
   return "#8b907c";
 }
 
-export function StrikeWindow({
-  result,
+export function CloseTradeControl({
   ticker,
   calculator,
   onClose,
-}: StrikeWindowProps) {
-  const side = SIDE[result.overall.winning];
-  const copy = copyFor(result.overall.winning, result.band);
-  const blocker = [...result.contributions]
-    .filter((item) => item.earned < item.max)
-    .sort((a, b) => b.max - b.earned - (a.max - a.earned))[0];
+  className,
+}: CloseTradeControlProps) {
   const [open, setOpen] = useState(false);
   const [price, setPrice] = useState("");
-
   const calc = calculateTrade(calculator, ticker);
   const exit = Number(price);
   const ready =
@@ -124,76 +123,17 @@ export function StrikeWindow({
   }
 
   return (
-    <div className="relative isolate min-h-[220px] overflow-hidden rounded-2xl border border-white/8 bg-black/35 p-4">
-      <span
-        className="pointer-events-none absolute -right-10 -top-16 size-48 rounded-full blur-3xl"
-        style={{ background: side.dim }}
-      />
-
-      <div className="relative">
-        <p className="font-mono text-[10px] tracking-[0.4em] text-muted-foreground">
-          STRIKE WINDOW
-        </p>
-        <p className="mt-1 text-sm text-muted-foreground">{copy}</p>
-      </div>
-
-      <motion.h2
-        key={side.label}
-        initial={{ y: 10, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        className="relative mt-4 w-fit text-5xl font-black tracking-tighter sm:text-6xl"
-        style={{ color: side.color, textShadow: `0 0 32px ${side.dim}` }}
+    <div className={className}>
+      <button
+        type="button"
+        onClick={() => {
+          setPrice("");
+          setOpen(true);
+        }}
+        className="group/close relative w-full overflow-hidden rounded-md border border-[#ff3b5c]/40 bg-[#ff3b5c] px-2.5 py-1.5 font-mono text-[10px] font-semibold tracking-widest text-white shadow-[0_0_18px_rgb(255_59_92/0.35)] transition hover:border-white hover:bg-white hover:text-[#1a0508] hover:shadow-[0_0_18px_rgb(255_255_255/0.28)]"
       >
-        {side.label}
-      </motion.h2>
-
-      <div className="relative mt-4 grid grid-cols-4 gap-2">
-        {RAIL_CATEGORIES.map((category) => {
-          const score = categoryScore(result, category);
-          const lit = pipCount(score);
-          const winning = result.byCategory[category]?.winning ?? "even";
-          return (
-            <div key={category} className="rounded-lg border border-white/8 bg-black/30 px-2 py-2">
-              <p className="font-mono text-[9px] tracking-widest text-muted-foreground">
-                {CATEGORY_SHORT[category]}
-              </p>
-              <div className="mt-1.5 flex gap-0.5">
-                {Array.from({ length: 5 }, (_, index) => (
-                  <span
-                    key={index}
-                    className="h-1.5 flex-1 rounded-full"
-                    style={{
-                      background:
-                        index < lit
-                          ? pipColor(winning, score)
-                          : "rgb(255 255 255 / 10%)",
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="relative mt-4 flex flex-col gap-2">
-        <p className="min-w-0 truncate font-mono text-[10px] tracking-wide text-muted-foreground">
-          {blocker
-            ? `BLOCKER · ${blocker.name.toUpperCase()}`
-            : "ALL RAILS ARMED"}
-        </p>
-        <button
-          type="button"
-          onClick={() => {
-            setPrice("");
-            setOpen(true);
-          }}
-          className="group/close relative overflow-hidden rounded-md border border-[#ff3b5c]/40 bg-[#ff3b5c] px-2.5 py-1.5 font-mono text-[10px] font-semibold tracking-widest text-white shadow-[0_0_18px_rgb(255_59_92/0.35)] transition hover:border-white hover:bg-white hover:text-[#1a0508] hover:shadow-[0_0_18px_rgb(255_255_255/0.28)]"
-        >
-          <span className="relative">CLOSE TRADE</span>
-        </button>
-      </div>
-
+        <span className="relative">CLOSE TRADE</span>
+      </button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader className="border-b border-white/8 pb-3">
@@ -302,6 +242,126 @@ export function StrikeWindow({
           </form>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+export function StrikeWindow({ result }: StrikeWindowProps) {
+  const [open, setOpen] = useState(false);
+  const side = SIDE[result.overall.winning];
+  const copy = copyFor(result.overall.winning, result.band);
+  const blocker = [...result.contributions]
+    .filter((item) => item.earned < item.max)
+    .sort((a, b) => b.max - b.earned - (a.max - a.earned))[0];
+
+  return (
+    <div
+      className={cn(
+        "relative isolate overflow-hidden rounded-2xl border border-white/8 bg-black/35",
+        "lg:min-h-[220px] lg:p-4",
+      )}
+    >
+      <span
+        className="pointer-events-none absolute -right-10 -top-16 size-48 rounded-full blur-3xl"
+        style={{ background: side.dim }}
+      />
+
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        aria-expanded={open}
+        className="relative flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left lg:hidden"
+      >
+        <p className="font-mono text-[10px] tracking-[0.4em] text-muted-foreground">
+          STRIKE WINDOW
+        </p>
+        <span className="flex items-center gap-2">
+          <span
+            className="font-mono text-sm font-bold tracking-widest"
+            style={{ color: side.color }}
+          >
+            {side.label}
+          </span>
+          <svg
+            viewBox="0 0 16 16"
+            className={cn(
+              "size-3.5 text-muted-foreground transition-transform",
+              open && "rotate-90 text-gold",
+            )}
+            aria-hidden
+          >
+            <path
+              d="M6 3l5 5-5 5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </span>
+      </button>
+
+      <div
+        className={cn(
+          "relative p-4 pt-0 lg:block lg:p-0",
+          open ? "block border-t border-white/8 pt-4 lg:border-0 lg:pt-0" : "hidden",
+        )}
+      >
+      <div className="relative">
+        <p className="hidden font-mono text-[10px] tracking-[0.4em] text-muted-foreground lg:block">
+          STRIKE WINDOW
+        </p>
+        <p className="text-sm text-muted-foreground lg:mt-1">{copy}</p>
+      </div>
+
+      <motion.h2
+        key={side.label}
+        initial={{ y: 10, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        className="relative mt-4 w-fit text-5xl font-black tracking-tighter sm:text-6xl"
+        style={{ color: side.color, textShadow: `0 0 32px ${side.dim}` }}
+      >
+        {side.label}
+      </motion.h2>
+
+      <div className="relative mt-4 grid grid-cols-4 gap-2">
+        {RAIL_CATEGORIES.map((category) => {
+          const score = categoryScore(result, category);
+          const lit = pipCount(score);
+          const winning = result.byCategory[category]?.winning ?? "even";
+          return (
+            <div key={category} className="rounded-lg border border-white/8 bg-black/30 px-2 py-2">
+              <p className="font-mono text-[9px] tracking-widest text-muted-foreground">
+                {CATEGORY_SHORT[category]}
+              </p>
+              <div className="mt-1.5 flex gap-0.5">
+                {Array.from({ length: 5 }, (_, index) => (
+                  <span
+                    key={index}
+                    className="h-1.5 flex-1 rounded-full"
+                    style={{
+                      background:
+                        index < lit
+                          ? pipColor(winning, score)
+                          : "rgb(255 255 255 / 10%)",
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="relative mt-4">
+        <p className="min-w-0 truncate font-mono text-[10px] tracking-wide text-muted-foreground">
+          {blocker
+            ? `BLOCKER · ${blocker.name.toUpperCase()}`
+            : "ALL RAILS ARMED"}
+        </p>
+      </div>
+      </div>
     </div>
   );
 }

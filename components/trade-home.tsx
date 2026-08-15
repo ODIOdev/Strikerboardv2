@@ -17,6 +17,7 @@ import { formatScore } from "@/lib/scoring";
 import { useDesk } from "@/hooks/use-desk";
 import { useNow } from "@/hooks/use-now";
 import { formatElapsed } from "@/lib/time";
+import { cn } from "@/lib/utils";
 import type { TradeGroup } from "@/lib/types";
 import {
   closedBookStats,
@@ -157,6 +158,7 @@ const PNL_RING_R = 28;
 const PNL_RING_C = 2 * Math.PI * PNL_RING_R;
 
 function PnlInfographic({ stats }: { stats: ClosedStats | null }) {
+  const [revealed, setRevealed] = useState(false);
   const empty = !stats || stats.decided === 0;
   const net = stats?.net ?? 0;
   const winColor = net >= 0 ? "#b6ff3b" : "#ff3b5c";
@@ -184,14 +186,43 @@ function PnlInfographic({ stats }: { stats: ClosedStats | null }) {
       );
 
   return (
-    <section className="relative w-full shrink-0 overflow-hidden rounded-2xl border border-white/8 bg-black/35 p-3 lg:w-[24rem]">
-      <span
-        className="pointer-events-none absolute -top-16 -right-10 size-36 rounded-full blur-3xl"
-        style={{ background: winColor, opacity: 0.14 }}
-      />
-      <p className="font-mono text-[10px] tracking-[0.4em] text-muted-foreground">
-        POST TRADE
-      </p>
+    <div
+      className={cn(
+        revealed
+          ? "w-full lg:w-auto"
+          : "mx-auto flex items-stretch justify-center gap-2 lg:mx-0",
+      )}
+    >
+    <section
+      className={cn(
+        "relative shrink-0 overflow-hidden rounded-2xl border border-white/8 bg-black/35",
+        revealed
+          ? "w-full p-3 lg:w-[24rem]"
+          : "flex h-[82px] w-[112px] items-center justify-center gap-1.5 p-2",
+      )}
+    >
+      {revealed ? (
+        <span
+          className="pointer-events-none absolute -top-16 -right-10 size-36 rounded-full blur-3xl"
+          style={{ background: winColor, opacity: 0.14 }}
+        />
+      ) : null}
+      {revealed ? (
+        <>
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-mono text-[10px] tracking-[0.4em] text-muted-foreground">
+          POST TRADE
+        </p>
+        <button
+          type="button"
+          onClick={() => setRevealed((prev) => !prev)}
+          aria-pressed={!revealed}
+          aria-label={revealed ? "Hide P&L" : "Show P&L"}
+          className="rounded-md p-1 text-muted-foreground transition hover:text-gold"
+        >
+          <EyeIcon open={revealed} />
+        </button>
+      </div>
       <Tabs defaultValue="pnl" className="mt-2 gap-0">
         <div className="relative grid min-h-[5.5rem]">
           <TabsContent
@@ -296,7 +327,61 @@ function PnlInfographic({ stats }: { stats: ClosedStats | null }) {
           </TabsTrigger>
         </TabsList>
       </Tabs>
+        </>
+      ) : (
+        <>
+          <PnlRing pct={rate} color={rateColor} compact />
+          <button
+            type="button"
+            onClick={() => setRevealed(true)}
+            aria-pressed
+            aria-label="Show P&L"
+            className="rounded-md p-1 text-muted-foreground transition hover:text-gold"
+          >
+            <EyeIcon open={false} />
+          </button>
+        </>
+      )}
     </section>
+      {!revealed ? (
+        <Link
+          href="/trade/new"
+          className="flex h-[82px] w-[112px] shrink-0 flex-col items-center justify-center rounded-2xl border border-gold bg-gold font-mono text-[10px] font-bold tracking-[0.22em] text-[#0b1204] transition hover:bg-black hover:text-gold lg:hidden"
+        >
+          NEW
+          <span>TRADE</span>
+        </Link>
+      ) : null}
+    </div>
+  );
+}
+
+function EyeIcon({ open }: { open: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="size-4"
+      aria-hidden
+    >
+      {open ? (
+        <>
+          <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+          <circle cx="12" cy="12" r="3" />
+        </>
+      ) : (
+        <>
+          <path d="M3 3l18 18" />
+          <path d="M10.6 10.6a3 3 0 0 0 4.2 4.2" />
+          <path d="M9.9 5.2A10.8 10.8 0 0 1 12 5c6.5 0 10 7 10 7a18.6 18.6 0 0 1-2.2 3.1" />
+          <path d="M6.6 6.6C3.9 8.5 2 12 2 12s3.5 7 10 7a10.4 10.4 0 0 0 4.4-1" />
+        </>
+      )}
+    </svg>
   );
 }
 
@@ -347,10 +432,18 @@ function PnlMoney({
   );
 }
 
-function PnlRing({ pct, color }: { pct: number; color: string }) {
+function PnlRing({
+  pct,
+  color,
+  compact = false,
+}: {
+  pct: number;
+  color: string;
+  compact?: boolean;
+}) {
   const dash = (Math.min(100, Math.max(0, pct)) / 100) * PNL_RING_C;
   return (
-    <div className="relative size-14">
+    <div className={cn("relative", compact ? "size-16" : "size-14")}>
       <svg viewBox="0 0 72 72" className="size-full">
         <circle
           cx="36"
@@ -358,7 +451,7 @@ function PnlRing({ pct, color }: { pct: number; color: string }) {
           r={PNL_RING_R}
           fill="none"
           stroke="rgb(255 255 255 / 8%)"
-          strokeWidth="6"
+          strokeWidth={compact ? 8 : 6}
         />
         <circle
           cx="36"
@@ -366,7 +459,7 @@ function PnlRing({ pct, color }: { pct: number; color: string }) {
           r={PNL_RING_R}
           fill="none"
           stroke={color}
-          strokeWidth="6"
+          strokeWidth={compact ? 8 : 6}
           strokeDasharray={`${dash} ${PNL_RING_C}`}
           strokeLinecap="round"
           transform="rotate(-90 36 36)"
@@ -376,10 +469,22 @@ function PnlRing({ pct, color }: { pct: number; color: string }) {
         className="absolute inset-0 flex items-center justify-center font-mono tabular-nums"
         style={{ color }}
       >
-        <span className="text-xl font-semibold tracking-tight">
+        <span
+          className={cn(
+            "font-semibold tracking-tight",
+            compact ? "text-lg" : "text-xl",
+          )}
+        >
           {Math.round(pct)}
         </span>
-        <span className="ml-0.5 text-[10px] font-medium opacity-45">%</span>
+        <span
+          className={cn(
+            "font-medium opacity-45",
+            compact ? "ml-px text-[10px]" : "ml-0.5 text-[10px]",
+          )}
+        >
+          %
+        </span>
       </p>
     </div>
   );

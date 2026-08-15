@@ -48,10 +48,12 @@ const MODES: { id: ClockMode; label: string }[] = [
 
 export function WorldClock() {
   const now = useNow(true);
+  const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<ClockMode>("live");
   const instant = now ? new Date(now) : null;
   const prevOpen = useRef<boolean | null>(null);
   const prevMode = useRef(mode);
+  const ny = instant ? zoneParts(instant, "America/New_York") : null;
 
   useEffect(() => {
     if (mode === "live" || !instant) {
@@ -76,8 +78,44 @@ export function WorldClock() {
   }, [instant, mode]);
 
   return (
-    <section className="w-full rounded-2xl border border-white/8 bg-black/35 p-3">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+    <section className="w-full overflow-hidden rounded-2xl border border-white/8 bg-black/35">
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left"
+      >
+        <p className="font-mono text-[10px] tracking-[0.4em] text-muted-foreground">
+          TIME
+        </p>
+        <span className="flex items-center gap-2">
+          {!open && ny ? (
+            <span className="font-mono text-sm tabular-nums tracking-tight text-muted-foreground">
+              {String(ny.hour).padStart(2, "0")}:{String(ny.minute).padStart(2, "0")}
+              <span className="ml-1.5 text-[10px] tracking-widest">NYC</span>
+            </span>
+          ) : null}
+          <svg
+            viewBox="0 0 16 16"
+            className={cn(
+              "size-3.5 text-muted-foreground transition-transform",
+              open && "rotate-90 text-gold",
+            )}
+            aria-hidden
+          >
+            <path
+              d="M6 3l5 5-5 5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </span>
+      </button>
+      {open ? (
+      <div className="flex flex-col gap-3 border-t border-white/8 p-3 lg:flex-row lg:items-center">
         <div
           role="radiogroup"
           aria-label="Clock mode"
@@ -126,6 +164,7 @@ export function WorldClock() {
           />
         )}
       </div>
+      ) : null}
     </section>
   );
 }

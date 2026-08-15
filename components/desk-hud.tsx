@@ -143,10 +143,7 @@ export function DeskHud({ trades }: DeskHudProps) {
       </section>
 
       <section className="flex h-full flex-col rounded-2xl border border-white/8 bg-black/35 p-4">
-        <p className="font-mono text-[10px] tracking-[0.4em] text-muted-foreground">
-          INFOGRAPHICS
-        </p>
-        <Tabs defaultValue="bias" className="mt-3 flex min-h-0 flex-1 flex-col gap-0">
+        <Tabs defaultValue="bias" className="flex min-h-0 flex-1 flex-col gap-0">
           <TabsList
             variant="line"
             className="w-full shrink-0 justify-center border-b border-white/8 bg-transparent"
@@ -331,7 +328,7 @@ function BookExposure({
         type="button"
         onClick={() => setOpen((prev) => !prev)}
         aria-expanded={open}
-        className="flex w-full flex-col gap-3 p-4 text-left transition hover:bg-white/[0.03]"
+        className="flex w-full flex-col gap-3 p-4 text-left"
       >
         <div className="flex items-center justify-between gap-3">
           <p className="font-mono text-[10px] tracking-[0.4em] text-muted-foreground">

@@ -42,7 +42,7 @@ export function ScoreOrb({ score, grade, winning, earned, max }: ScoreOrbProps) 
   const biasColor = BIAS_COLOR[winning];
 
   return (
-    <div className="relative isolate flex min-h-[220px] flex-col items-center justify-center overflow-hidden rounded-2xl border border-white/8 bg-black/35 p-4">
+    <div className="relative isolate hidden min-h-[220px] flex-col items-center justify-center overflow-hidden rounded-2xl border border-white/8 bg-black/35 p-4 lg:flex">
       {flash && (
         <div className="strike-flash pointer-events-none absolute inset-0 bg-gold/40" />
       )}

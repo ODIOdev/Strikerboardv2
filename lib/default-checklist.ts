@@ -1,178 +1,50 @@
-import { createTfBias, createTfZone, isNewsCategory, newsFields, type BoardState, type Confluence, type DeskState, type Trade } from "./types";
+import { createTfBias, createTfZone, isNewsCategory, newsFields, type BoardState, type Category, type Confluence, type DeskState, type Trade } from "./types";
 import { createDefaultCalculator } from "./calculator";
 
+function seed(
+  id: string,
+  name: string,
+  category: Category,
+  weight: number,
+): Confluence {
+  return {
+    id,
+    name,
+    category,
+    weight,
+    biasByTf: { 5: "bullish", 15: "bullish", 30: "bullish" },
+    zoneByTf: { 5: "reaction", 15: "reaction", 30: "reaction" },
+    active: true,
+    candleConfirmed: false,
+  };
+}
+
 export const DEFAULT_CONFLUENCES: Confluence[] = [
-  {
-    id: "news-conflict",
-    name: "No major news conflict",
-    category: "News / Events",
-    weight: 8,
-    biasByTf: { 5: "bullish", 15: "bullish", 30: "bullish" },
-    zoneByTf: { 5: "reaction", 15: "reaction", 30: "reaction" },
-    active: true,
-    candleConfirmed: false,
-  },
-  {
-    id: "news-window",
-    name: "Event window is clear",
-    category: "News / Events",
-    weight: 6,
-    biasByTf: { 5: "bullish", 15: "bullish", 30: "bullish" },
-    zoneByTf: { 5: "reaction", 15: "reaction", 30: "reaction" },
-    active: true,
-    candleConfirmed: false,
-  },
-  {
-    id: "bias-htf",
-    name: "HTF trend agrees with bias",
-    category: "Market Bias",
-    weight: 10,
-    biasByTf: { 5: "bullish", 15: "bullish", 30: "bullish" },
-    zoneByTf: { 5: "reaction", 15: "reaction", 30: "reaction" },
-    active: true,
-    candleConfirmed: false,
-  },
-  {
-    id: "bias-session",
-    name: "Session bias agrees with HTF",
-    category: "Market Bias",
-    weight: 8,
-    biasByTf: { 5: "bullish", 15: "bullish", 30: "bullish" },
-    zoneByTf: { 5: "reaction", 15: "reaction", 30: "reaction" },
-    active: true,
-    candleConfirmed: false,
-  },
-  {
-    id: "zone-sr",
-    name: "Key S/R at the origin",
-    category: "Key Levels / Zones",
-    weight: 10,
-    biasByTf: { 5: "bullish", 15: "bullish", 30: "bullish" },
-    zoneByTf: { 5: "reaction", 15: "reaction", 30: "reaction" },
-    active: true,
-    candleConfirmed: false,
-  },
-  {
-    id: "zone-fib",
-    name: "Retrace holds 38.2–78.6",
-    category: "Key Levels / Zones",
-    weight: 8,
-    biasByTf: { 5: "bullish", 15: "bullish", 30: "bullish" },
-    zoneByTf: { 5: "reaction", 15: "reaction", 30: "reaction" },
-    active: true,
-    candleConfirmed: false,
-  },
-  {
-    id: "zone-target",
-    name: "Target 1.0–1.618 of impulse",
-    category: "Key Levels / Zones",
-    weight: 8,
-    biasByTf: { 5: "bullish", 15: "bullish", 30: "bullish" },
-    zoneByTf: { 5: "reaction", 15: "reaction", 30: "reaction" },
-    active: true,
-    candleConfirmed: false,
-  },
-  {
-    id: "struct-impulse",
-    name: "Impulse leg is clear",
-    category: "Price Structure",
-    weight: 10,
-    biasByTf: { 5: "bullish", 15: "bullish", 30: "bullish" },
-    zoneByTf: { 5: "reaction", 15: "reaction", 30: "reaction" },
-    active: true,
-    candleConfirmed: false,
-  },
-  {
-    id: "struct-retrace",
-    name: "Retrace holds the structure",
-    category: "Price Structure",
-    weight: 8,
-    biasByTf: { 5: "bullish", 15: "bullish", 30: "bullish" },
-    zoneByTf: { 5: "reaction", 15: "reaction", 30: "reaction" },
-    active: true,
-    candleConfirmed: false,
-  },
-  {
-    id: "struct-room",
-    name: "Continuation has room",
-    category: "Price Structure",
-    weight: 8,
-    biasByTf: { 5: "bullish", 15: "bullish", 30: "bullish" },
-    zoneByTf: { 5: "reaction", 15: "reaction", 30: "reaction" },
-    active: true,
-    candleConfirmed: false,
-  },
-  {
-    id: "flow-volume",
-    name: "Volume confirms the impulse",
-    category: "Order Flow",
-    weight: 10,
-    biasByTf: { 5: "bullish", 15: "bullish", 30: "bullish" },
-    zoneByTf: { 5: "reaction", 15: "reaction", 30: "reaction" },
-    active: true,
-    candleConfirmed: false,
-  },
-  {
-    id: "flow-delta",
-    name: "Delta / absorption agrees",
-    category: "Order Flow",
-    weight: 8,
-    biasByTf: { 5: "bullish", 15: "bullish", 30: "bullish" },
-    zoneByTf: { 5: "reaction", 15: "reaction", 30: "reaction" },
-    active: true,
-    candleConfirmed: false,
-  },
-  {
-    id: "mom-div",
-    name: "Divergence into the pullback",
-    category: "Momentum",
-    weight: 8,
-    biasByTf: { 5: "bullish", 15: "bullish", 30: "bullish" },
-    zoneByTf: { 5: "reaction", 15: "reaction", 30: "reaction" },
-    active: true,
-    candleConfirmed: false,
-  },
-  {
-    id: "mom-expand",
-    name: "Momentum expanding with impulse",
-    category: "Momentum",
-    weight: 8,
-    biasByTf: { 5: "bullish", 15: "bullish", 30: "bullish" },
-    zoneByTf: { 5: "reaction", 15: "reaction", 30: "reaction" },
-    active: true,
-    candleConfirmed: false,
-  },
-  {
-    id: "entry-trigger",
-    name: "Entry trigger printed",
-    category: "Trend / Entry",
-    weight: 10,
-    biasByTf: { 5: "bullish", 15: "bullish", 30: "bullish" },
-    zoneByTf: { 5: "reaction", 15: "reaction", 30: "reaction" },
-    active: true,
-    candleConfirmed: false,
-  },
-  {
-    id: "entry-inv",
-    name: "Invalidation level defined",
-    category: "Trend / Entry",
-    weight: 8,
-    biasByTf: { 5: "bullish", 15: "bullish", 30: "bullish" },
-    zoneByTf: { 5: "reaction", 15: "reaction", 30: "reaction" },
-    active: true,
-    candleConfirmed: false,
-  },
-  {
-    id: "entry-rr",
-    name: "R:R ≥ 2:1",
-    category: "Trend / Entry",
-    weight: 8,
-    biasByTf: { 5: "bullish", 15: "bullish", 30: "bullish" },
-    zoneByTf: { 5: "reaction", 15: "reaction", 30: "reaction" },
-    active: true,
-    candleConfirmed: false,
-  },
+  seed("news-conflict", "No major news conflict", "News / Events", 8),
+  seed("news-window", "Event window is clear", "News / Events", 6),
+  seed("bias-htf", "HTF trend agrees with bias", "Market Bias", 10),
+  seed("bias-session", "Session bias agrees with HTF", "Market Bias", 8),
+  seed("zone-major", "Major Zones", "Key Levels / Zones", 75),
+  seed("struct-bos", "Break of Structure (BOS)", "Price Structure", 50),
+  seed("struct-choch", "Change of Character (ChocH)", "Price Structure", 8),
+  seed("flow-volume", "Volume confirms the impulse", "Order Flow", 10),
+  seed("flow-delta", "Delta / absorption agrees", "Order Flow", 8),
+  seed("mom-hidden", "Hidden Divergence", "Momentum", 75),
+  seed("entry-trigger", "Entry trigger printed", "Trend / Entry", 10),
+  seed("entry-inv", "Invalidation level defined", "Trend / Entry", 8),
+  seed("entry-rr", "R:R ≥ 2:1", "Trend / Entry", 8),
 ];
+
+const REPLACED_FACTORY_NAMES = new Set([
+  "Key S/R at the origin",
+  "Retrace holds 38.2–78.6",
+  "Target 1.0–1.618 of impulse",
+  "Impulse leg is clear",
+  "Retrace holds the structure",
+  "Continuation has room",
+  "Divergence into the pullback",
+  "Momentum expanding with impulse",
+]);
 
 export function toChecklistTemplate(items: Confluence[]): Confluence[] {
   return items.map((item) => {
@@ -208,14 +80,32 @@ export function createBlankConfluences(template?: Confluence[]): Confluence[] {
   return cloneChecklist(template ?? DEFAULT_CONFLUENCES);
 }
 
-export function ensureDeskChecklist(desk: DeskState): DeskState {
-  if (Array.isArray(desk.checklist)) {
-    return { ...desk, checklist: toChecklistTemplate(desk.checklist) };
+export function lockedChecklist(): Confluence[] {
+  return cloneChecklist(DEFAULT_CONFLUENCES);
+}
+
+function shouldRestoreLocked(items: Confluence[]): boolean {
+  if (!Array.isArray(items) || items.length === 0) return false;
+  return items.some((item) => REPLACED_FACTORY_NAMES.has(item.name));
+}
+
+export function deskNeedsLockedRepair(desk: DeskState): boolean {
+  if (desk.trades.some((trade) => shouldRestoreLocked(trade.confluences))) {
+    return true;
   }
+  const names = (desk.checklist ?? []).map((item) => item.name);
+  if (names.length !== DEFAULT_CONFLUENCES.length) return true;
+  return DEFAULT_CONFLUENCES.some((item, index) => item.name !== names[index]);
+}
+
+export function ensureDeskChecklist(desk: DeskState): DeskState {
   return {
     ...desk,
-    checklist: toChecklistTemplate(
-      desk.trades[0]?.confluences ?? createBlankConfluences(),
+    checklist: toChecklistTemplate(DEFAULT_CONFLUENCES),
+    trades: desk.trades.map((trade) =>
+      shouldRestoreLocked(trade.confluences)
+        ? { ...trade, confluences: lockedChecklist() }
+        : trade,
     ),
   };
 }
@@ -226,7 +116,7 @@ export function createDefaultBoard(template?: Confluence[]): BoardState {
     recentTickers: [],
     bias: "bullish",
     wave: "A",
-    confluences: createBlankConfluences(template),
+    confluences: createBlankConfluences(template ?? DEFAULT_CONFLUENCES),
   };
 }
 
@@ -236,7 +126,7 @@ export function createEmptyDesk(): DeskState {
     closedTrades: [],
     recentTickers: [],
     groups: [],
-    checklist: createBlankConfluences(),
+    checklist: toChecklistTemplate(DEFAULT_CONFLUENCES),
   };
 }
 
@@ -245,7 +135,7 @@ export function createTradeRecord(
   template?: Confluence[],
 ): Trade {
   const now = Date.now();
-  const board = createDefaultBoard(template);
+  const board = createDefaultBoard(template ?? DEFAULT_CONFLUENCES);
   return {
     id,
     createdAt: now,
