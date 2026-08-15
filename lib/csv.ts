@@ -1,10 +1,13 @@
 import { createDefaultCalculator, inferAssetClass, normalizeTicker, ACCOUNT_CURRENCIES } from "./calculator";
-import { createTradeRecord } from "./default-checklist";
+import { createTradeRecord, toChecklistTemplate } from "./default-checklist";
+import type { ChecklistPreset } from "./checklist-presets";
+import { createTfBias, createTfZone, resolveCategory } from "./types";
 import type {
   AssetClass,
   Bias,
   CalcSide,
   ClosedTrade,
+  Confluence,
   DeskState,
   EquityMode,
   OptionRight,
@@ -39,6 +42,30 @@ export const CSV_COLUMNS = [
   "closedAt",
   "realizedPnl",
 ] as const;
+
+export const LIST_CSV_COLUMNS = [
+  "list",
+  "listId",
+  "print",
+  "category",
+  "weight",
+  "createdAt",
+] as const;
+
+export type CsvListImportResult = {
+  presets: ChecklistPreset[];
+  skipped: number;
+};
+
+export function downloadCsv(filename: string, csv: string) {
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
 
 export type CsvImportResult = {
   trades: Trade[];
@@ -110,6 +137,141 @@ export function deskToCsv(desk: DeskState) {
     lines.push(rowFromTrade(trade, desk, "closed"));
   }
   return `${lines.join("\n")}\n`;
+}
+
+function headerKeys(header: string) {
+  const delimiter = detectDelimiter(header);
+  return splitCsvLine(header, delimiter).map((item) =>
+    item.toLowerCase().replace(/[\s_]+/g, ""),
+  );
+}
+
+export function isChecklistCsv(text: string) {
+  const line = text
+    .replace(/^\uFEFF/, "")
+    .split(/\r?\n/)
+    .map((row) => row.trim())
+    .find((row) => row && !/^sep=/i.test(row));
+  if (!line) return false;
+  const headers = headerKeys(line);
+  const hasList = headers.includes("list") || headers.includes("listname");
+  const hasPrint =
+    headers.includes("print") ||
+    headers.includes("confluence") ||
+    headers.includes("name");
+  const hasTicker = headers.includes("ticker") || headers.includes("symbol");
+  return hasList && hasPrint && !hasTicker;
+}
+
+export function checklistsToCsv(presets: ChecklistPreset[]) {
+  const lines = [LIST_CSV_COLUMNS.join(",")];
+  for (const preset of presets) {
+    for (const item of preset.items) {
+      lines.push(
+        csvLine([
+          preset.name,
+          preset.id,
+          item.name,
+          item.category,
+          item.weight,
+          stamp(preset.createdAt),
+        ]),
+      );
+    }
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+function listItem(
+  name: string,
+  category: string,
+  weight: string,
+): Confluence | null {
+  const resolved = resolveCategory(category);
+  if (!name.trim() || !resolved) return null;
+  const parsed = Number(weight);
+  return {
+    id: crypto.randomUUID(),
+    name: name.trim(),
+    category: resolved,
+    weight: Number.isFinite(parsed)
+      ? Math.min(100, Math.max(1, Math.round(parsed)))
+      : 8,
+    active: false,
+    candleConfirmed: false,
+    biasByTf: createTfBias(),
+    zoneByTf: createTfZone(),
+  };
+}
+
+export function csvToChecklists(text: string): CsvListImportResult {
+  const lines = text
+    .replace(/^\uFEFF/, "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !/^sep=/i.test(line));
+  if (lines.length < 2) return { presets: [], skipped: 0 };
+
+  const delimiter = detectDelimiter(lines[0]);
+  const headers = headerKeys(lines[0]);
+  const index = (name: string) => headers.indexOf(name);
+  const read = (cells: string[], name: string, aliases: string[] = []) => {
+    for (const key of [name, ...aliases]) {
+      const at = index(key.replace(/[\s_]+/g, ""));
+      if (at >= 0) return cells[at] ?? "";
+    }
+    return "";
+  };
+
+  const grouped = new Map<
+    string,
+    { id: string; name: string; createdAt: number; items: Confluence[] }
+  >();
+  let skipped = 0;
+
+  for (const line of lines.slice(1)) {
+    const cells = splitCsvLine(line, delimiter);
+    if (cells.every((cell) => !cell)) continue;
+    const listName =
+      read(cells, "list", ["listname", "checklist"]) || "Untitled";
+    const print = read(cells, "print", ["confluence", "name"]);
+    const item = listItem(
+      print,
+      read(cells, "category"),
+      read(cells, "weight"),
+    );
+    if (!item) {
+      skipped += 1;
+      continue;
+    }
+    const key = listName.trim().toLowerCase() || "untitled";
+    const existing = grouped.get(key);
+    if (existing) {
+      existing.items.push(item);
+      continue;
+    }
+    grouped.set(key, {
+      id: read(cells, "listid", ["id"]) || crypto.randomUUID(),
+      name: listName.trim() || "Untitled",
+      createdAt: parseStamp(read(cells, "createdat", ["created_at"])) || Date.now(),
+      items: [item],
+    });
+  }
+
+  const presets = [...grouped.values()].flatMap((row) => {
+    const items = toChecklistTemplate(row.items);
+    if (!items.length) return [];
+    return [
+      {
+        id: row.id || crypto.randomUUID(),
+        name: row.name,
+        items,
+        createdAt: row.createdAt,
+      },
+    ];
+  });
+
+  return { presets, skipped };
 }
 
 function detectDelimiter(header: string) {

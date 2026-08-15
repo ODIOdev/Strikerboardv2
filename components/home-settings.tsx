@@ -11,7 +11,8 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { deskToCsv, csvToDesk, type CsvImportResult } from "@/lib/csv";
+import { deskToCsv, csvToDesk, checklistsToCsv, csvToChecklists, downloadCsv, isChecklistCsv, type CsvImportResult, type CsvListImportResult } from "@/lib/csv";
+import { getChecklistPresets, mergeChecklistPresets } from "@/lib/checklist-presets";
 import { getDeskSnapshot, writeRecents } from "@/lib/desk-store";
 import { erasePlatform } from "@/lib/erase";
 import { useDesk } from "@/hooks/use-desk";
@@ -21,16 +22,6 @@ type HomeSettingsProps = {
   utility?: boolean;
 };
 
-function downloadCsv(filename: string, csv: string) {
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
 export function HomeSettings({ nav = false, utility = false }: HomeSettingsProps) {
   const { recentTickers, importCsvBook } = useDesk();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -38,36 +29,68 @@ export function HomeSettings({ nav = false, utility = false }: HomeSettingsProps
   const [pendingCsv, setPendingCsv] = useState<{
     name: string;
     text: string;
-    preview: CsvImportResult;
+    kind: "book" | "lists";
+    preview: CsvImportResult | CsvListImportResult;
   } | null>(null);
   const [eraseArmed, setEraseArmed] = useState(false);
 
   function createCsv() {
     const stamp = new Date().toISOString().slice(0, 10);
+    const lists = getChecklistPresets();
     downloadCsv(`striker-book-${stamp}.csv`, deskToCsv(getDeskSnapshot()));
+    if (lists.length > 0) {
+      window.setTimeout(() => {
+        downloadCsv(`striker-lists-${stamp}.csv`, checklistsToCsv(lists));
+      }, 250);
+      setCsvNote("CSV downloaded for the book and saved lists. Upload on live to load them.");
+      return;
+    }
     setCsvNote("CSV downloaded. Fill rows in Excel, then import.");
   }
 
   async function onPickCsv(file: File | undefined) {
     if (!file) return;
     const text = await file.text();
-    const preview = csvToDesk(text);
-    setPendingCsv({ name: file.name, text, preview });
-    const added = preview.trades.length + preview.closedTrades.length;
-    setCsvNote(
-      added === 0
-        ? preview.skipped
-          ? `${preview.skipped} row${preview.skipped === 1 ? "" : "s"} skipped. Need a ticker.`
-          : "No trades found in that CSV."
-        : `Ready: ${preview.trades.length} open · ${preview.closedTrades.length} closed${
-            preview.skipped ? ` · ${preview.skipped} skipped` : ""
-          }.`,
-    );
+    if (isChecklistCsv(text)) {
+      const preview = csvToChecklists(text);
+      setPendingCsv({ name: file.name, text, kind: "lists", preview });
+      setCsvNote(
+        preview.presets.length === 0
+          ? preview.skipped
+            ? `${preview.skipped} row${preview.skipped === 1 ? "" : "s"} skipped.`
+            : "No saved lists found in that CSV."
+          : `Ready: ${preview.presets.length} saved list${preview.presets.length === 1 ? "" : "s"}.`,
+      );
+    } else {
+      const preview = csvToDesk(text);
+      setPendingCsv({ name: file.name, text, kind: "book", preview });
+      const added = preview.trades.length + preview.closedTrades.length;
+      setCsvNote(
+        added === 0
+          ? preview.skipped
+            ? `${preview.skipped} row${preview.skipped === 1 ? "" : "s"} skipped. Need a ticker.`
+            : "No trades found in that CSV."
+          : `Ready: ${preview.trades.length} open · ${preview.closedTrades.length} closed${
+              preview.skipped ? ` · ${preview.skipped} skipped` : ""
+            }.`,
+      );
+    }
     if (fileRef.current) fileRef.current.value = "";
   }
 
   function loadCsv() {
     if (!pendingCsv) return;
+    if (pendingCsv.kind === "lists") {
+      const result = csvToChecklists(pendingCsv.text);
+      mergeChecklistPresets(result.presets);
+      setCsvNote(
+        result.presets.length === 0
+          ? "No saved lists found in that CSV."
+          : `Loaded ${result.presets.length} saved list${result.presets.length === 1 ? "" : "s"}.`,
+      );
+      setPendingCsv(null);
+      return;
+    }
     const result = importCsvBook(pendingCsv.text);
     const added = result.trades.length + result.closedTrades.length;
     setCsvNote(
@@ -153,8 +176,8 @@ export function HomeSettings({ nav = false, utility = false }: HomeSettingsProps
               CSV BOOK
             </p>
             <p className="mt-2 text-sm text-muted-foreground">
-              Create a CSV of the desk, edit tickers and levels in a spreadsheet,
-              then upload and load it back.
+              Create a CSV of the desk and saved lists, then upload and load it
+              back on the live site.
             </p>
             <div className="mt-3 grid grid-cols-2 gap-2">
               <Button

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState, useSyncExternalStore } from "react";
+import { FormEvent, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,10 +15,17 @@ import {
   deleteChecklistPreset,
   getChecklistPresets,
   getServerChecklistPresets,
+  mergeChecklistPresets,
   saveChecklistPreset,
   subscribeChecklistPresets,
   type ChecklistPreset,
 } from "@/lib/checklist-presets";
+import {
+  checklistsToCsv,
+  csvToChecklists,
+  downloadCsv,
+  isChecklistCsv,
+} from "@/lib/csv";
 import type { Confluence } from "@/lib/types";
 
 type ChecklistPresetsProps = {
@@ -38,6 +45,8 @@ export function ChecklistPresets({
   const [saveOpen, setSaveOpen] = useState(false);
   const [loadOpen, setLoadOpen] = useState(false);
   const [name, setName] = useState("");
+  const [csvNote, setCsvNote] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const suggested = useMemo(() => {
     const first = confluences[0]?.name?.trim();
@@ -60,6 +69,41 @@ export function ChecklistPresets({
   function loadPreset(preset: ChecklistPreset) {
     onLoad(preset.items);
     setLoadOpen(false);
+  }
+
+  function createCsv() {
+    if (presets.length === 0) {
+      setCsvNote("No saved lists to export.");
+      return;
+    }
+    const stamp = new Date().toISOString().slice(0, 10);
+    downloadCsv(`striker-lists-${stamp}.csv`, checklistsToCsv(presets));
+    setCsvNote("CSV downloaded. Upload it on the live desk to load these lists.");
+  }
+
+  async function onPickCsv(file: File | undefined) {
+    if (!file) return;
+    const text = await file.text();
+    if (!isChecklistCsv(text)) {
+      setCsvNote("That CSV is not a saved-list file.");
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
+    const parsed = csvToChecklists(text);
+    if (parsed.presets.length === 0) {
+      setCsvNote(
+        parsed.skipped
+          ? `${parsed.skipped} row${parsed.skipped === 1 ? "" : "s"} skipped.`
+          : "No saved lists found in that CSV.",
+      );
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
+    mergeChecklistPresets(parsed.presets);
+    setCsvNote(
+      `Loaded ${parsed.presets.length} list${parsed.presets.length === 1 ? "" : "s"} from CSV.`,
+    );
+    if (fileRef.current) fileRef.current.value = "";
   }
 
   return (
@@ -121,7 +165,8 @@ export function ChecklistPresets({
             </p>
             <DialogTitle>Load list</DialogTitle>
             <DialogDescription>
-              Saved checklists. Load one onto this trade, or delete it.
+              Saved checklists. Load one onto this trade, export a CSV for the
+              live site, or delete it.
             </DialogDescription>
           </DialogHeader>
           <div className="min-h-0 flex-1 overflow-y-auto border-t border-white/8 p-3">
@@ -162,6 +207,39 @@ export function ChecklistPresets({
                 ))}
               </ul>
             )}
+          </div>
+          <div className="space-y-2 border-t border-white/8 px-4 py-3">
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="border-white/10 font-mono text-[10px] tracking-widest"
+                disabled={presets.length === 0}
+                onClick={createCsv}
+              >
+                Create CSV
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="border-white/10 font-mono text-[10px] tracking-widest"
+                onClick={() => fileRef.current?.click()}
+              >
+                Upload CSV
+              </Button>
+            </div>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="sr-only"
+              onChange={(event) => void onPickCsv(event.target.files?.[0])}
+            />
+            {csvNote ? (
+              <p className="font-mono text-[10px] tracking-widest text-gold">
+                {csvNote}
+              </p>
+            ) : null}
           </div>
         </DialogContent>
       </Dialog>

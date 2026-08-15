@@ -144,6 +144,27 @@ export function deleteChecklistPreset(id: string) {
   writePresets(getChecklistPresets().filter((preset) => preset.id !== id));
 }
 
+export function mergeChecklistPresets(incoming: ChecklistPreset[]) {
+  const valid = incoming.flatMap((item) => {
+    const preset = coercePreset(item);
+    return preset ? [preset] : [];
+  });
+  if (valid.length === 0) return getChecklistPresets();
+  let next = getChecklistPresets();
+  for (const preset of valid) {
+    const existing = next.find(
+      (item) => item.name.toLowerCase() === preset.name.toLowerCase(),
+    );
+    next = existing
+      ? next.map((item) =>
+          item.id === existing.id ? { ...preset, id: existing.id } : item,
+        )
+      : [preset, ...next];
+  }
+  writePresets(next);
+  return next;
+}
+
 export function clearChecklistPresets() {
   if (typeof window !== "undefined") {
     window.localStorage.removeItem(PRESETS_KEY);
