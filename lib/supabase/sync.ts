@@ -4,6 +4,11 @@ import {
 } from "@/lib/desk-store";
 import { loadIdeas, saveIdeas, type Idea } from "@/lib/ideas";
 import {
+  getChecklistPresets,
+  replaceChecklistPresets,
+  type ChecklistPreset,
+} from "@/lib/checklist-presets";
+import {
   getProfileSnapshot,
   resetProfile,
   saveProfile,
@@ -11,7 +16,7 @@ import {
 } from "@/lib/profile";
 import { getSupabase } from "@/lib/supabase/client";
 import type { DeskState } from "@/lib/types";
-import { deskCoverage, deskPrintCount } from "@/lib/default-checklist";
+import { deskPrintCount } from "@/lib/default-checklist";
 import { peekUsers, replaceUsersState, type UsersState } from "@/lib/users";
 
 const BOOK_ID = "striker-board";
@@ -22,6 +27,7 @@ export type CloudBook = {
   updatedAt: number;
   desk: DeskState;
   ideas: Idea[];
+  checklists?: ChecklistPreset[];
   profile: DeskProfile;
   users: UsersState;
 };
@@ -47,6 +53,7 @@ function capture(): CloudBook {
     updatedAt: localStamp() || Date.now(),
     desk: getDeskSnapshot(),
     ideas: loadIdeas(),
+    checklists: getChecklistPresets(),
     profile: getProfileSnapshot(),
     users: peekUsers(),
   };
@@ -58,6 +65,9 @@ function apply(book: CloudBook) {
     touchStamp(book.updatedAt);
     replaceDesk(book.desk);
     saveIdeas(book.ideas);
+    if (Array.isArray(book.checklists)) {
+      replaceChecklistPresets(book.checklists);
+    }
     if (book.profile.name || book.profile.handle) {
       saveProfile(book.profile);
     } else {
@@ -114,6 +124,7 @@ export async function pullCloud(): Promise<CloudBook | null> {
         : Date.parse(String(data.updated_at ?? "")) || 0,
     desk: raw.desk,
     ideas: Array.isArray(raw.ideas) ? raw.ideas : [],
+    checklists: Array.isArray(raw.checklists) ? raw.checklists : undefined,
     profile: raw.profile ?? { name: "", handle: "" },
     users: raw.users ?? { currentId: "", users: [] },
   };
@@ -132,17 +143,6 @@ export async function hydrateFromCloud() {
     }
     const remoteCount = deskPrintCount(remote.desk);
     const localCount = deskPrintCount(local.desk);
-    const remoteCoverage = deskCoverage(remote.desk);
-    const localCoverage = deskCoverage(local.desk);
-    if (remoteCoverage > localCoverage) {
-      apply(remote);
-      return;
-    }
-    if (localCoverage > remoteCoverage) {
-      touchStamp();
-      await pushCloud();
-      return;
-    }
     if (remoteCount > 0 && localCount === 0) {
       apply(remote);
       return;

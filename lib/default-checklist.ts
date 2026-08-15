@@ -87,38 +87,26 @@ export function deskPrintCount(desk: DeskState): number {
   return checklist + open + closed;
 }
 
-export function deskCoverage(desk: DeskState): number {
-  const names = new Set<string>();
-  for (const item of desk.checklist ?? []) names.add(item.name);
-  for (const trade of desk.trades ?? []) {
-    for (const item of trade.confluences ?? []) names.add(item.name);
-  }
-  return DEFAULT_CONFLUENCES.filter((item) => names.has(item.name)).length;
-}
-
-function mergeMissingDefaults(items: Confluence[] | undefined): Confluence[] {
-  const current = items ?? [];
-  const have = new Set(current.map((item) => item.name));
-  const missing = DEFAULT_CONFLUENCES.filter((item) => !have.has(item.name));
-  if (missing.length === 0) return current;
-  return [...current, ...cloneChecklist(missing)];
-}
-
 export function ensureDeskChecklist(desk: DeskState): DeskState {
-  const checklist = mergeMissingDefaults(desk.checklist);
-  const trades = (desk.trades ?? []).map((trade) => {
-    const confluences = mergeMissingDefaults(trade.confluences);
-    return confluences === trade.confluences
+  const source =
+    Array.isArray(desk.checklist) && desk.checklist.length > 0
+      ? desk.checklist
+      : (desk.trades ?? []).find((trade) => trade.confluences?.length)
+          ?.confluences ?? DEFAULT_CONFLUENCES;
+  const needChecklist =
+    !Array.isArray(desk.checklist) || desk.checklist.length === 0;
+  const trades = (desk.trades ?? []).map((trade) =>
+    trade.confluences?.length
       ? trade
-      : { ...trade, confluences };
-  });
+      : { ...trade, confluences: cloneChecklist(source) },
+  );
   const tradesChanged = trades.some(
     (trade, index) => trade !== desk.trades[index],
   );
-  if (checklist === desk.checklist && !tradesChanged) return desk;
+  if (!needChecklist && !tradesChanged) return desk;
   return {
     ...desk,
-    checklist,
+    checklist: needChecklist ? toChecklistTemplate(source) : desk.checklist,
     trades,
   };
 }

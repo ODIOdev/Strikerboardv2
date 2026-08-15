@@ -113,6 +113,7 @@ export function StrikerDesk({ tradeId }: StrikerDeskProps) {
               onAdd={board.addConfluence}
               onRemove={board.removeConfluence}
               onRestore={board.restoreChecklist}
+              onLoadList={board.loadChecklist}
             />
             <div className="flex flex-col gap-3">
               <TradeTicket

@@ -228,6 +228,18 @@ export function useBoard(tradeId: string) {
     }));
   }, [tradeId]);
 
+  const loadChecklist = useCallback((items: Confluence[]) => {
+    if (!items.length) return;
+    writeTrade(
+      tradeId,
+      (prev) => ({
+        ...prev,
+        confluences: createBlankConfluences(items),
+      }),
+      { syncChecklist: true },
+    );
+  }, [tradeId]);
+
   const clearRecents = useCallback(() => {
     writeRecents([]);
   }, []);
@@ -261,6 +273,7 @@ export function useBoard(tradeId: string) {
     removeConfluence,
     resetTimeframes,
     restoreChecklist,
+    loadChecklist,
     clearRecents,
     wipeSession,
   };

@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } 
 import { ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ChecklistPresets } from "@/components/checklist-presets";
 import {
   bandFor,
   categoryScore,
@@ -43,6 +44,7 @@ type ConfluenceBoardProps = {
   onAdd: (input: { name: string; category: Category; weight: number }) => void;
   onRemove: (id: string) => void;
   onRestore: () => void;
+  onLoadList: (items: Confluence[]) => void;
 };
 
 function barColor(score: number) {
@@ -85,6 +87,7 @@ export function ConfluenceBoard({
   onAdd,
   onRemove,
   onRestore,
+  onLoadList,
 }: ConfluenceBoardProps) {
   const [name, setName] = useState("");
   const [category, setCategory] = useState<Category>("News / Events");
@@ -113,6 +116,12 @@ export function ConfluenceBoard({
     setOpen((prev) => ({ ...prev, [group]: !prev[group] }));
   }
 
+  function handleLoad(items: Confluence[]) {
+    onLoadList(items);
+    setOpen(groupsWithPrints(items));
+    openedFromPrints.current = items.length > 0;
+  }
+
   return (
     <section className="rounded-2xl border border-white/8 bg-black/35 p-3 lg:p-4">
       <div className="mb-3 flex flex-wrap items-end justify-between gap-2 lg:mb-4 lg:gap-3">
@@ -124,9 +133,12 @@ export function ConfluenceBoard({
             Weighted checklist
           </h2>
         </div>
-        <Button type="button" size="sm" variant="outline" onClick={onRestore}>
-          Reset checklist
-        </Button>
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
+          <ChecklistPresets confluences={confluences} onLoad={handleLoad} />
+          <Button type="button" size="sm" variant="outline" onClick={onRestore}>
+            Reset checklist
+          </Button>
+        </div>
       </div>
 
       <div className="space-y-2">

@@ -1,5 +1,6 @@
 import { resetDesk } from "./desk-store";
 import { clearIdeas } from "./ideas";
+import { clearChecklistPresets } from "./checklist-presets";
 import { resetProfile } from "./profile";
 import { clearLegacyDeskKeys } from "./storage";
 import { queueCloudErase } from "./supabase/queue";
@@ -10,6 +11,7 @@ export function erasePlatform() {
   resetDesk();
   clearLegacyDeskKeys();
   clearIdeas();
+  clearChecklistPresets();
   resetProfile();
   queueCloudErase();
 }
