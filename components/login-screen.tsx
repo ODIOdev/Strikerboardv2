@@ -7,8 +7,7 @@ import { Input } from "@/components/ui/input";
 import {
   completePasswordReset,
   confirmEmailCode,
-  continueWithProvider,
-  rememberedEmail,
+  rememberedUsername,
   resendEmailCode,
   startLocalAuth,
   startPasswordReset,
@@ -27,7 +26,6 @@ export function LoginScreen() {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
   const [remember, setRemember] = useState(true);
   const [code, setCode] = useState("");
   const [sentTo, setSentTo] = useState("");
@@ -36,9 +34,9 @@ export function LoginScreen() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    const saved = rememberedEmail();
+    const saved = rememberedUsername();
     if (saved) {
-      setEmail(saved);
+      setUsername(saved);
       setRemember(true);
     }
   }, []);
@@ -69,7 +67,6 @@ export function LoginScreen() {
       username,
       password,
       name,
-      email,
       remember,
     });
     setBusy(false);
@@ -78,7 +75,7 @@ export function LoginScreen() {
       return;
     }
     if ("needsCode" in result) {
-      setSentTo(result.email);
+      setSentTo(result.username);
       setLocalCode(result.localCode ?? "000000");
       setCode("000000");
       setCodePurpose("login");
@@ -127,14 +124,14 @@ export function LoginScreen() {
   async function forgot() {
     setError("");
     setBusy(true);
-    const result = await startPasswordReset(email, remember);
+    const result = await startPasswordReset(username, remember);
     setBusy(false);
     if (!result.ok) {
       setError(result.error);
       return;
     }
     if ("needsCode" in result) {
-      setSentTo(result.email);
+      setSentTo(result.username);
       setLocalCode(result.localCode ?? "000000");
       setCode("000000");
       setCodePurpose("reset");
@@ -151,17 +148,9 @@ export function LoginScreen() {
       setError(result.error);
       return;
     }
-    setSentTo(result.email);
+    setSentTo(result.username);
     setLocalCode(result.localCode ?? "000000");
     setCode("000000");
-  }
-
-  function oauth(provider: "google" | "apple") {
-    setBusy(true);
-    setError("");
-    const session = continueWithProvider(provider, remember);
-    enter(session);
-    setBusy(false);
   }
 
   return (
@@ -181,7 +170,7 @@ export function LoginScreen() {
 
           {step === "code" ? (
             <CodeStep
-              email={sentTo}
+              username={sentTo}
               localCode={localCode}
               code={code}
               error={error}
@@ -199,7 +188,7 @@ export function LoginScreen() {
             />
           ) : step === "reset" ? (
             <ResetStep
-              email={sentTo}
+              username={sentTo}
               password={password}
               confirm={confirm}
               error={error}
@@ -223,11 +212,6 @@ export function LoginScreen() {
                 <h1 className="mt-2 text-[1.65rem] font-semibold tracking-tight">
                   {mode === "login" ? "Open your book" : "Create a desk"}
                 </h1>
-                <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                  {mode === "login"
-                    ? "Sign in with email. First login uses the demo code 000000."
-                    : "Demo mode. First login uses the desk code 000000."}
-                </p>
               </div>
 
               <div
@@ -275,28 +259,15 @@ export function LoginScreen() {
                     />
                   </Field>
                 ) : null}
-                <Field label="EMAIL">
+                <Field label="USER">
                   <Input
-                    type={mode === "login" ? "text" : "email"}
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    placeholder="you@desk.com"
-                    autoComplete="email"
-                    inputMode="email"
-                    className="h-11 border-white/10 bg-black/50 px-3"
+                    value={username}
+                    onChange={(event) => setUsername(event.target.value)}
+                    placeholder="desk"
+                    autoComplete="username"
+                    className="h-11 border-white/10 bg-black/50 px-3 font-mono"
                   />
                 </Field>
-                {mode === "setup" ? (
-                  <Field label="USER">
-                    <Input
-                      value={username}
-                      onChange={(event) => setUsername(event.target.value)}
-                      placeholder="desk"
-                      autoComplete="username"
-                      className="h-11 border-white/10 bg-black/50 px-3 font-mono"
-                    />
-                  </Field>
-                ) : null}
                 <Field label="PASSWORD">
                   <Input
                     type="password"
@@ -376,47 +347,6 @@ export function LoginScreen() {
                   {mode === "login" ? "CONTINUE" : "SEND CODE"}
                 </Button>
               </form>
-
-              <div className="relative my-5 flex items-center gap-3">
-                <span className="h-px flex-1 bg-white/10" />
-                <span className="font-mono text-[10px] tracking-[0.28em] text-muted-foreground">
-                  OR CONTINUE
-                </span>
-                <span className="h-px flex-1 bg-white/10" />
-              </div>
-
-              <div className="relative grid gap-2.5">
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => oauth("google")}
-                  className="flex h-12 items-center justify-center gap-3 rounded-xl border border-white/15 bg-white font-mono text-[10px] font-bold tracking-widest text-[#1f1f1f] transition hover:bg-[#f7f7f7] disabled:opacity-50"
-                >
-                  <span>CONTINUE WITH</span>
-                  <img
-                    src="/auth/google-wordmark.png"
-                    alt="Google"
-                    width={544}
-                    height={184}
-                    className="h-[22px] w-auto"
-                  />
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => oauth("apple")}
-                  className="flex h-12 items-center justify-center gap-3 rounded-xl border border-white/20 bg-black font-mono text-[10px] font-bold tracking-widest text-white transition hover:bg-[#111] disabled:opacity-50"
-                >
-                  <span>CONTINUE WITH</span>
-                  <img
-                    src="/auth/apple.svg"
-                    alt="Apple"
-                    width={22}
-                    height={28}
-                    className="h-7 w-auto"
-                  />
-                </button>
-              </div>
             </>
           )}
         </section>
@@ -426,7 +356,7 @@ export function LoginScreen() {
 }
 
 function CodeStep({
-  email,
+  username,
   localCode,
   code,
   error,
@@ -437,7 +367,7 @@ function CodeStep({
   onResend,
   onBack,
 }: {
-  email: string;
+  username: string;
   localCode: string;
   code: string;
   error: string;
@@ -458,7 +388,7 @@ function CodeStep({
       </h1>
       <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
         Demo mode — use code 000000 for{" "}
-        <span className="text-foreground">{email}</span>.
+        <span className="text-foreground">{username}</span>.
       </p>
 
       {localCode ? (
@@ -516,7 +446,7 @@ function CodeStep({
 }
 
 function ResetStep({
-  email,
+  username,
   password,
   confirm,
   error,
@@ -526,7 +456,7 @@ function ResetStep({
   onSubmit,
   onBack,
 }: {
-  email: string;
+  username: string;
   password: string;
   confirm: string;
   error: string;
@@ -547,7 +477,7 @@ function ResetStep({
       </h1>
       <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
         Set a new password for{" "}
-        <span className="text-foreground">{email}</span>.
+        <span className="text-foreground">{username}</span>.
       </p>
       <form onSubmit={onSubmit} className="mt-5 space-y-3.5">
         <Field label="PASSWORD">

@@ -21,7 +21,7 @@ export type AuthAccount = {
 
 export type AuthStart =
   | { ok: true; session: AuthSession }
-  | { ok: true; needsCode: true; email: string; localCode?: string }
+  | { ok: true; needsCode: true; username: string; localCode?: string }
   | { ok: false; error: string };
 
 export const AUTH_EVENT = "striker-auth";
@@ -31,7 +31,7 @@ export const ADMIN_PASSWORD = "12345678";
 const SESSION_KEY = "striker-session-v1";
 const ACCOUNTS_KEY = "striker-accounts-v1";
 const PENDING_KEY = "striker-auth-pending-v1";
-const REMEMBER_EMAIL_KEY = "striker-auth-email-v1";
+const REMEMBER_USER_KEY = "striker-auth-user-v1";
 const CODE_MS = 10 * 60 * 1000;
 
 type PendingAuth = {
@@ -62,10 +62,6 @@ function normalizeEmail(email: string) {
 
 function normalizeUsername(value: string) {
   return value.trim().toLowerCase().replace(/^@+/, "").split("@")[0] ?? "";
-}
-
-export function validEmail(email: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(email));
 }
 
 function makeCode() {
@@ -148,17 +144,17 @@ function writeSession(next: AuthSession | null, remember = true) {
     window.sessionStorage.removeItem(SESSION_KEY);
     if (next) {
       sessionStore(remember).setItem(SESSION_KEY, JSON.stringify(next));
-      if (remember && next.email) {
-        window.localStorage.setItem(REMEMBER_EMAIL_KEY, next.email);
+      if (remember && next.username) {
+        window.localStorage.setItem(REMEMBER_USER_KEY, next.username);
       }
     }
   }
   emit();
 }
 
-export function rememberedEmail() {
+export function rememberedUsername() {
   if (typeof window === "undefined") return "";
-  return window.localStorage.getItem(REMEMBER_EMAIL_KEY) ?? "";
+  return window.localStorage.getItem(REMEMBER_USER_KEY) ?? "";
 }
 
 function ensure() {
@@ -174,7 +170,7 @@ function readPending(): PendingAuth | null {
     const raw = window.sessionStorage.getItem(PENDING_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as PendingAuth;
-    if (!parsed?.email || !parsed.localCode || !parsed.expiresAt) return null;
+    if (!parsed?.username || !parsed.localCode || !parsed.expiresAt) return null;
     if (parsed.expiresAt < Date.now()) {
       window.sessionStorage.removeItem(PENDING_KEY);
       return null;
@@ -274,20 +270,19 @@ export async function startLocalAuth(input: {
   username: string;
   password: string;
   name?: string;
-  email: string;
   remember?: boolean;
 }): Promise<AuthStart> {
   const user = normalizeUsername(input.username);
   const password = input.password;
-  const email = normalizeEmail(input.email);
   const name = input.name?.trim() || user;
   const remember = input.remember !== false;
 
+  if (!user) return { ok: false, error: "Enter a user." };
   if (!password) return { ok: false, error: "Enter a password." };
 
   if (
     input.mode === "login" &&
-    normalizeUsername(input.email) === ADMIN_USER &&
+    user === ADMIN_USER &&
     password === ADMIN_PASSWORD
   ) {
     const session: AuthSession = {
@@ -301,14 +296,9 @@ export async function startLocalAuth(input: {
     return { ok: true, session };
   }
 
-  if (!validEmail(email)) {
-    return { ok: false, error: "Enter a valid email." };
-  }
-
   const accounts = readAccounts();
 
   if (input.mode === "setup") {
-    if (!user) return { ok: false, error: "Enter a user." };
     if (password.length < 6) {
       return { ok: false, error: "Password needs 6+ characters." };
     }
@@ -316,13 +306,10 @@ export async function startLocalAuth(input: {
     if (accounts.some((item) => item.username === user)) {
       return { ok: false, error: "User already exists." };
     }
-    if (accounts.some((item) => item.email && item.email === email)) {
-      return { ok: false, error: "Email already in use." };
-    }
   } else {
-    const account = accounts.find((item) => item.email === email);
+    const account = accounts.find((item) => item.username === user);
     if (!account || account.password !== password) {
-      return { ok: false, error: "Wrong email or password." };
+      return { ok: false, error: "Wrong user or password." };
     }
     if (account.verifiedAt) {
       const session = sessionFromAccount(account);
@@ -331,17 +318,14 @@ export async function startLocalAuth(input: {
     }
   }
 
-  const pendingUser =
-    input.mode === "setup"
-      ? user
-      : (accounts.find((item) => item.email === email)?.username ?? user);
+  const pendingUser = user;
   const localCode = makeCode();
   writePending({
     mode: input.mode,
     username: pendingUser,
     password,
     name,
-    email,
+    email: "",
     localCode,
     remember,
     expiresAt: Date.now() + CODE_MS,
@@ -349,7 +333,7 @@ export async function startLocalAuth(input: {
   return {
     ok: true,
     needsCode: true,
-    email,
+    username: pendingUser,
     localCode,
   };
 }
@@ -381,7 +365,7 @@ export async function confirmEmailCode(
 }
 
 export async function resendEmailCode(): Promise<
-  | { ok: true; email: string; localCode?: string }
+  | { ok: true; username: string; localCode?: string }
   | { ok: false; error: string }
 > {
   const pending = readPending();
@@ -394,22 +378,22 @@ export async function resendEmailCode(): Promise<
   });
   return {
     ok: true,
-    email: pending.email,
+    username: pending.username,
     localCode,
   };
 }
 
 export async function startPasswordReset(
-  emailValue: string,
+  usernameValue: string,
   remember = true,
 ): Promise<AuthStart> {
-  if (normalizeUsername(emailValue) === ADMIN_USER) {
+  const user = normalizeUsername(usernameValue);
+  if (user === ADMIN_USER) {
     return { ok: false, error: "Master admin uses the desk password." };
   }
-  const email = normalizeEmail(emailValue);
-  if (!validEmail(email)) return { ok: false, error: "Enter the email on the desk." };
-  const account = readAccounts().find((item) => item.email === email);
-  if (!account) return { ok: false, error: "No desk for that email." };
+  if (!user) return { ok: false, error: "Enter the user on the desk." };
+  const account = readAccounts().find((item) => item.username === user);
+  if (!account) return { ok: false, error: "No desk for that user." };
 
   const localCode = makeCode();
   writePending({
@@ -417,7 +401,7 @@ export async function startPasswordReset(
     username: account.username,
     password: "",
     name: account.name,
-    email,
+    email: account.email,
     localCode,
     remember,
     expiresAt: Date.now() + CODE_MS,
@@ -425,7 +409,7 @@ export async function startPasswordReset(
   return {
     ok: true,
     needsCode: true,
-    email,
+    username: account.username,
     localCode,
   };
 }
