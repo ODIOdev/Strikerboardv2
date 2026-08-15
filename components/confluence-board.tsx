@@ -69,15 +69,6 @@ const SIDE_LABEL: Record<TfSide, { short: string; long: string }> = {
   range: { short: "R", long: "RANGE" },
 };
 
-function groupsWithPrints(confluences: Confluence[]) {
-  const next: Partial<Record<Category, boolean>> = {};
-  for (const item of confluences) {
-    const group = resolveCategory(item.category);
-    if (group) next[group] = true;
-  }
-  return next;
-}
-
 export function ConfluenceBoard({
   result,
   confluences,
@@ -93,16 +84,7 @@ export function ConfluenceBoard({
   const [category, setCategory] = useState<Category>("News / Events");
   const [weight, setWeight] = useState(8);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [open, setOpen] = useState<Partial<Record<Category, boolean>>>(() =>
-    groupsWithPrints(confluences),
-  );
-  const openedFromPrints = useRef(confluences.length > 0);
-
-  useLayoutEffect(() => {
-    if (openedFromPrints.current || confluences.length === 0) return;
-    openedFromPrints.current = true;
-    setOpen(groupsWithPrints(confluences));
-  }, [confluences]);
+  const [open, setOpen] = useState<Partial<Record<Category, boolean>>>({});
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -118,8 +100,7 @@ export function ConfluenceBoard({
 
   function handleLoad(items: Confluence[]) {
     onLoadList(items);
-    setOpen(groupsWithPrints(items));
-    openedFromPrints.current = items.length > 0;
+    setOpen({});
   }
 
   return (
