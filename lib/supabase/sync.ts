@@ -130,17 +130,19 @@ export async function hydrateFromCloud() {
       await pushCloud();
       return;
     }
-    if (remote.updatedAt > local.updatedAt) {
-      if (deskPrintCount(remote.desk) === 0 && deskPrintCount(local.desk) > 0) {
-        touchStamp();
-        await pushCloud();
-        return;
-      }
+    const remoteCount = deskPrintCount(remote.desk);
+    const localCount = deskPrintCount(local.desk);
+    if (remoteCount > 0 && localCount === 0) {
       apply(remote);
-      if (deskPrintCount(remote.desk) === 0) {
-        touchStamp();
-        await pushCloud();
-      }
+      return;
+    }
+    if (localCount > 0 && remoteCount === 0) {
+      touchStamp();
+      await pushCloud();
+      return;
+    }
+    if (remote.updatedAt > local.updatedAt) {
+      apply(remote);
       return;
     }
     if (local.updatedAt >= remote.updatedAt) {

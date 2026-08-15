@@ -67,6 +67,15 @@ const SIDE_LABEL: Record<TfSide, { short: string; long: string }> = {
   range: { short: "R", long: "RANGE" },
 };
 
+function groupsWithPrints(confluences: Confluence[]) {
+  const next: Partial<Record<Category, boolean>> = {};
+  for (const item of confluences) {
+    const group = resolveCategory(item.category);
+    if (group) next[group] = true;
+  }
+  return next;
+}
+
 export function ConfluenceBoard({
   result,
   confluences,
@@ -81,7 +90,16 @@ export function ConfluenceBoard({
   const [category, setCategory] = useState<Category>("News / Events");
   const [weight, setWeight] = useState(8);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [open, setOpen] = useState<Partial<Record<Category, boolean>>>({});
+  const [open, setOpen] = useState<Partial<Record<Category, boolean>>>(() =>
+    groupsWithPrints(confluences),
+  );
+  const openedFromPrints = useRef(confluences.length > 0);
+
+  useLayoutEffect(() => {
+    if (openedFromPrints.current || confluences.length === 0) return;
+    openedFromPrints.current = true;
+    setOpen(groupsWithPrints(confluences));
+  }, [confluences]);
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -145,8 +163,15 @@ export function ConfluenceBoard({
                     expanded ? "rotate-90" : ""
                   }`}
                 />
-                <span className="min-w-0 flex-1 truncate font-mono text-[10px] tracking-[0.22em] text-gold">
-                  {group.toUpperCase()}
+                <span className="min-w-0 flex-1 truncate">
+                  <span className="font-mono text-[10px] tracking-[0.22em] text-gold">
+                    {group.toUpperCase()}
+                  </span>
+                  {rows.length > 0 ? (
+                    <span className="ml-2 font-mono text-[10px] tracking-widest text-muted-foreground">
+                      {rows.map((row) => row.name).join(" · ")}
+                    </span>
+                  ) : null}
                 </span>
                 <span className="hidden h-1.5 w-24 overflow-hidden rounded-full bg-white/8 sm:block sm:w-32">
                   <span
