@@ -40,17 +40,10 @@ function itemWinning(item: Confluence): TfSide | "even" {
   }
   const longEarned = sidePoints(item, "bullish");
   const shortEarned = sidePoints(item, "bearish");
-  const rangeEarned = sidePoints(item, "range");
-  const best = Math.max(longEarned, shortEarned, rangeEarned);
+  const best = Math.max(longEarned, shortEarned);
   if (best === 0) return "even";
-  const tied =
-    Number(longEarned === best) +
-    Number(shortEarned === best) +
-    Number(rangeEarned === best);
-  if (tied > 1) return "even";
-  if (longEarned === best) return "bullish";
-  if (shortEarned === best) return "bearish";
-  return "range";
+  if (longEarned === shortEarned) return "even";
+  return longEarned > shortEarned ? "bullish" : "bearish";
 }
 
 export type PrintTradeHit = {

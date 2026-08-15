@@ -27,6 +27,24 @@ export const ZONE_PLAY_POINTS: Record<ZonePlay, number> = {
 
 export const TF_SPAN = 0.8 + 0.9 + 1 + 1.1;
 
+function biasMap(item: Confluence) {
+  return item.biasByTf ?? createTfBias("bullish");
+}
+
+export function selectedTimeframes(item: Confluence): Timeframe[] {
+  const map = biasMap(item);
+  return TIMEFRAMES.filter(
+    (timeframe) => map[timeframe] === "bullish" || map[timeframe] === "bearish",
+  );
+}
+
+export function selectedSpan(item: Confluence): number {
+  return selectedTimeframes(item).reduce(
+    (sum, timeframe) => sum + timeframeMultiplier(timeframe),
+    0,
+  );
+}
+
 export function bandFor(score: number): Band {
   if (score >= 80) return "Prime";
   if (score >= 60) return "Valid";
@@ -71,6 +89,8 @@ export function newsHeat(item: Confluence): number {
 }
 
 export function tfPoints(item: Confluence, timeframe: Timeframe): number {
+  const side = biasMap(item)[timeframe];
+  if (side === "range") return 0;
   if (isNewsCategory(item.category)) {
     return 100 * timeframeMultiplier(timeframe) * newsHeat(item);
   }
@@ -79,24 +99,23 @@ export function tfPoints(item: Confluence, timeframe: Timeframe): number {
 }
 
 export function sidePoints(item: Confluence, side: TfSide): number {
-  const map = item.biasByTf ?? createTfBias("bullish");
+  if (side === "range") return 0;
+  const map = biasMap(item);
   return TIMEFRAMES.reduce((sum, timeframe) => {
     return map[timeframe] === side ? sum + tfPoints(item, timeframe) : sum;
   }, 0);
 }
 
 export function itemMax(item: Confluence): number {
-  if (isNewsCategory(item.category)) return 100 * TF_SPAN;
-  if (!isZoneCategory(item.category)) return item.weight * TF_SPAN;
-  return ZONE_PLAY_POINTS.breakout * TF_SPAN;
+  const span = selectedSpan(item);
+  if (span === 0) return 0;
+  if (isNewsCategory(item.category)) return 100 * span;
+  if (!isZoneCategory(item.category)) return item.weight * span;
+  return ZONE_PLAY_POINTS.breakout * span;
 }
 
 export function itemPoints(item: Confluence): number {
-  return Math.max(
-    sidePoints(item, "bullish"),
-    sidePoints(item, "bearish"),
-    sidePoints(item, "range"),
-  );
+  return Math.max(sidePoints(item, "bullish"), sidePoints(item, "bearish"));
 }
 
 export function actionHint(winning: TfSide | "even", band: Band): string {
@@ -158,43 +177,33 @@ function timeframeVote(
   timeframe: Timeframe,
 ): TfSide | "even" {
   const longEarned = group.reduce((sum, item) => {
-    const map = item.biasByTf ?? createTfBias("bullish");
-    return map[timeframe] === "bullish"
+    return biasMap(item)[timeframe] === "bullish"
       ? sum + tfPoints(item, timeframe)
       : sum;
   }, 0);
   const shortEarned = group.reduce((sum, item) => {
-    const map = item.biasByTf ?? createTfBias("bullish");
-    return map[timeframe] === "bearish"
+    return biasMap(item)[timeframe] === "bearish"
       ? sum + tfPoints(item, timeframe)
       : sum;
   }, 0);
-  const rangeEarned = group.reduce((sum, item) => {
-    const map = item.biasByTf ?? createTfBias("bullish");
-    return map[timeframe] === "range"
-      ? sum + tfPoints(item, timeframe)
-      : sum;
-  }, 0);
-  return sideFromPoints(longEarned, shortEarned, rangeEarned);
+  return sideFromPoints(longEarned, shortEarned, 0);
 }
 
 export function overallBias(confluences: Confluence[]): OverallBias {
   let longEarned = 0;
   let shortEarned = 0;
-  let rangeEarned = 0;
   for (const item of confluences) {
     longEarned += sidePoints(item, "bullish");
     shortEarned += sidePoints(item, "bearish");
-    rangeEarned += sidePoints(item, "range");
   }
-  const winning = sideFromPoints(longEarned, shortEarned, rangeEarned);
-  const total = longEarned + shortEarned + rangeEarned;
-  const best = Math.max(longEarned, shortEarned, rangeEarned);
+  const winning = sideFromPoints(longEarned, shortEarned, 0);
+  const total = longEarned + shortEarned;
+  const best = Math.max(longEarned, shortEarned);
   return {
     winning,
     longEarned,
     shortEarned,
-    rangeEarned,
+    rangeEarned: 0,
     conviction: total === 0 ? 0 : (best / total) * 100,
   };
 }
@@ -222,18 +231,14 @@ export function scoreBoard(confluences: Confluence[]): ScoreResult {
         (sum, item) => sum + sidePoints(item, "bearish"),
         0,
       );
-      const rangeEarned = group.reduce(
-        (sum, item) => sum + sidePoints(item, "range"),
-        0,
-      );
-      const catEarned = Math.max(longEarned, shortEarned, rangeEarned);
+      const catEarned = Math.max(longEarned, shortEarned);
       const cat: CategoryScore = {
         score: catMax === 0 ? 0 : (catEarned / catMax) * 100,
         earned: catEarned,
         max: catMax,
         longEarned,
         shortEarned,
-        rangeEarned,
+        rangeEarned: 0,
         winning: majorityVote(
           TIMEFRAMES.map((timeframe) => timeframeVote(group, timeframe)),
         ),
@@ -252,7 +257,7 @@ export function scoreBoard(confluences: Confluence[]): ScoreResult {
       winning: sideFromPoints(
         sidePoints(item, "bullish"),
         sidePoints(item, "bearish"),
-        sidePoints(item, "range"),
+        0,
       ),
     }))
     .sort((a, b) => b.earned - a.earned || b.max - a.max);

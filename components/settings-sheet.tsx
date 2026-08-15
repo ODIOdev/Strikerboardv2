@@ -52,7 +52,7 @@ export function SettingsSheet({
           </p>
           <SheetTitle className="text-lg">Settings</SheetTitle>
           <SheetDescription>
-            Each timeframe votes long/short. Best of 3 wins the category.
+            L/S timeframes score the board. Range stays at 0. One selected timeframe is the full score.
           </SheetDescription>
         </SheetHeader>
 
