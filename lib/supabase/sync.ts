@@ -132,9 +132,14 @@ export async function pullCloud(): Promise<CloudBook | null> {
 
 export async function hydrateFromCloud() {
   if (hydrating || typeof window === "undefined") return;
-  if (!getSupabase()) return;
+  const { applyLaunchSeed } = await import("../launch-seed");
+  if (!getSupabase()) {
+    await applyLaunchSeed();
+    return;
+  }
   hydrating = true;
   try {
+    await applyLaunchSeed();
     const remote = await pullCloud();
     const local = capture();
     if (!remote) {
@@ -145,18 +150,17 @@ export async function hydrateFromCloud() {
     const localCount = deskPrintCount(local.desk);
     if (remoteCount > 0 && localCount === 0) {
       apply(remote);
-      return;
-    }
-    if (localCount > 0 && remoteCount === 0) {
+    } else if (localCount > 0 && remoteCount === 0) {
       touchStamp();
       await pushCloud();
-      return;
-    }
-    if (remote.updatedAt > local.updatedAt) {
+    } else if (remote.updatedAt > local.updatedAt) {
       apply(remote);
-      return;
+    } else if (local.updatedAt >= remote.updatedAt) {
+      await pushCloud();
     }
-    if (local.updatedAt >= remote.updatedAt) {
+    const repaired = await applyLaunchSeed();
+    if (repaired) {
+      touchStamp();
       await pushCloud();
     }
   } finally {

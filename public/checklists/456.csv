@@ -1,0 +1,10 @@
+list,listId,print,category,weight,createdAt
+MNT EDG,35c21a3a-26f5-48d1-aa40-e0e91bd54262,Major Zones,Key Levels / Zones,75,2026-08-15T16:35:58.478Z
+MNT EDG,35c21a3a-26f5-48d1-aa40-e0e91bd54262,Break of Structure (BOS),Price Structure,40,2026-08-15T16:35:58.478Z
+MNT EDG,35c21a3a-26f5-48d1-aa40-e0e91bd54262,Change of Character (ChocH),Price Structure,30,2026-08-15T16:35:58.478Z
+MNT EDG,35c21a3a-26f5-48d1-aa40-e0e91bd54262,Hidden Divergence,Momentum,60,2026-08-15T16:35:58.478Z
+MNT EDG,35c21a3a-26f5-48d1-aa40-e0e91bd54262,Events,News / Events,50,2026-08-15T16:35:58.478Z
+MNT EDG,35c21a3a-26f5-48d1-aa40-e0e91bd54262,HTF BIAS,Market Bias,60,2026-08-15T16:35:58.478Z
+MNT EDG,35c21a3a-26f5-48d1-aa40-e0e91bd54262,Order Block,Order Flow,50,2026-08-15T16:35:58.478Z
+MNT EDG,35c21a3a-26f5-48d1-aa40-e0e91bd54262,EMA,Trend / Entry,20,2026-08-15T16:35:58.478Z
+MNT EDG,35c21a3a-26f5-48d1-aa40-e0e91bd54262,Reg Divergence,Momentum,40,2026-08-15T16:35:58.478Z

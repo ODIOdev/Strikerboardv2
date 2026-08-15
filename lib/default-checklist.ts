@@ -19,21 +19,33 @@ function seed(
   };
 }
 
+export const LAUNCH_PRESET_ID = "35c21a3a-26f5-48d1-aa40-e0e91bd54262";
+export const LAUNCH_PRESET_NAME = "MNT EDG";
+
 export const DEFAULT_CONFLUENCES: Confluence[] = [
-  seed("news-conflict", "No major news conflict", "News / Events", 8),
-  seed("news-window", "Event window is clear", "News / Events", 6),
-  seed("bias-htf", "HTF trend agrees with bias", "Market Bias", 10),
-  seed("bias-session", "Session bias agrees with HTF", "Market Bias", 8),
   seed("zone-major", "Major Zones", "Key Levels / Zones", 75),
-  seed("struct-bos", "Break of Structure (BOS)", "Price Structure", 50),
-  seed("struct-choch", "Change of Character (ChocH)", "Price Structure", 8),
-  seed("flow-volume", "Volume confirms the impulse", "Order Flow", 10),
-  seed("flow-delta", "Delta / absorption agrees", "Order Flow", 8),
-  seed("mom-hidden", "Hidden Divergence", "Momentum", 75),
-  seed("entry-trigger", "Entry trigger printed", "Trend / Entry", 10),
-  seed("entry-inv", "Invalidation level defined", "Trend / Entry", 8),
-  seed("entry-rr", "R:R ≥ 2:1", "Trend / Entry", 8),
+  seed("struct-bos", "Break of Structure (BOS)", "Price Structure", 40),
+  seed("struct-choch", "Change of Character (ChocH)", "Price Structure", 30),
+  seed("mom-hidden", "Hidden Divergence", "Momentum", 60),
+  seed("news-events", "Events", "News / Events", 50),
+  seed("bias-htf", "HTF BIAS", "Market Bias", 60),
+  seed("flow-ob", "Order Block", "Order Flow", 50),
+  seed("entry-ema", "EMA", "Trend / Entry", 20),
+  seed("mom-reg", "Reg Divergence", "Momentum", 40),
 ];
+
+export function sameChecklistTemplate(
+  left: Confluence[] | undefined,
+  right: Confluence[],
+) {
+  if (!Array.isArray(left) || left.length !== right.length) return false;
+  return left.every(
+    (item, index) =>
+      item.name === right[index].name &&
+      item.category === right[index].category &&
+      item.weight === right[index].weight,
+  );
+}
 
 export function toChecklistTemplate(items: Confluence[]): Confluence[] {
   return items.map((item) => {
