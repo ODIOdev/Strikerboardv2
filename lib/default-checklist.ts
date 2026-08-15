@@ -1,31 +1,30 @@
-import { createTfBias, createTfZone, isNewsCategory, newsFields, type BoardState, type Confluence, type DeskState, type Trade } from "./types";
+import { createTfBias, createTfZone, isNewsCategory, newsFields, type BoardState, type Category, type Confluence, type DeskState, type Trade } from "./types";
 import { createDefaultCalculator } from "./calculator";
 
-export const DEFAULT_CONFLUENCES: Confluence[] = [];
+function seed(
+  id: string,
+  name: string,
+  category: Category,
+  weight: number,
+): Confluence {
+  return {
+    id,
+    name,
+    category,
+    weight,
+    biasByTf: createTfBias("bullish"),
+    zoneByTf: createTfZone("reaction"),
+    active: false,
+    candleConfirmed: false,
+  };
+}
 
-const REPLACED_NAMES = new Set([
-  "No major news conflict",
-  "Event window is clear",
-  "HTF trend agrees with bias",
-  "Session bias agrees with HTF",
-  "Key S/R at the origin",
-  "Retrace holds 38.2–78.6",
-  "Target 1.0–1.618 of impulse",
-  "Impulse leg is clear",
-  "Retrace holds the structure",
-  "Continuation has room",
-  "Volume confirms the impulse",
-  "Delta / absorption agrees",
-  "Divergence into the pullback",
-  "Momentum expanding with impulse",
-  "Entry trigger printed",
-  "Invalidation level defined",
-  "R:R ≥ 2:1",
-  "Major Zones",
-  "Break of Structure (BOS)",
-  "Change of Character (ChocH)",
-  "Hidden Divergence",
-]);
+export const DEFAULT_CONFLUENCES: Confluence[] = [
+  seed("zone-major", "Major Zones", "Key Levels / Zones", 75),
+  seed("struct-bos", "Break of Structure (BOS)", "Price Structure", 50),
+  seed("struct-choch", "Change of Character (ChocH)", "Price Structure", 8),
+  seed("mom-hidden", "Hidden Divergence", "Momentum", 75),
+];
 
 export function toChecklistTemplate(items: Confluence[]): Confluence[] {
   return items.map((item) => {
@@ -58,38 +57,56 @@ export function cloneChecklist(items: Confluence[]): Confluence[] {
 }
 
 export function createBlankConfluences(template?: Confluence[]): Confluence[] {
-  return cloneChecklist(template ?? DEFAULT_CONFLUENCES);
+  const source = template?.length ? template : DEFAULT_CONFLUENCES;
+  return cloneChecklist(source);
 }
 
 export function lockedChecklist(): Confluence[] {
   return cloneChecklist(DEFAULT_CONFLUENCES);
 }
 
-function shouldRestoreLocked(items: Confluence[]): boolean {
-  if (!Array.isArray(items)) return true;
-  if (items.length === 0) return false;
-  return items.some((item) => REPLACED_NAMES.has(item.name));
+export function deskPrintCount(desk: DeskState): number {
+  const checklist = Array.isArray(desk.checklist) ? desk.checklist.length : 0;
+  const open = (desk.trades ?? []).reduce(
+    (count, trade) => count + (trade.confluences?.length ?? 0),
+    0,
+  );
+  const closed = (desk.closedTrades ?? []).reduce(
+    (count, trade) => count + (trade.confluences?.length ?? 0),
+    0,
+  );
+  return checklist + open + closed;
 }
 
-export function deskNeedsLockedRepair(desk: DeskState): boolean {
-  if (shouldRestoreLocked(desk.checklist ?? [])) return true;
-  return desk.trades.some((trade) => shouldRestoreLocked(trade.confluences));
+function templateSource(desk: DeskState): Confluence[] {
+  if (Array.isArray(desk.checklist) && desk.checklist.length > 0) {
+    return desk.checklist;
+  }
+  const fromTrade = (desk.trades ?? []).find((trade) => trade.confluences?.length);
+  if (fromTrade) return fromTrade.confluences;
+  const fromClosed = (desk.closedTrades ?? []).find(
+    (trade) => trade.confluences?.length,
+  );
+  if (fromClosed) return fromClosed.confluences;
+  return DEFAULT_CONFLUENCES;
 }
 
 export function ensureDeskChecklist(desk: DeskState): DeskState {
-  const trades = desk.trades.map((trade) =>
-    shouldRestoreLocked(trade.confluences)
-      ? { ...trade, confluences: lockedChecklist() }
-      : trade,
+  const source = templateSource(desk);
+  const needChecklist =
+    !Array.isArray(desk.checklist) || desk.checklist.length === 0;
+  const trades = (desk.trades ?? []).map((trade) =>
+    trade.confluences?.length
+      ? trade
+      : { ...trade, confluences: cloneChecklist(source) },
   );
-  const tradesChanged = trades.some((trade, index) => trade !== desk.trades[index]);
-  const checklist = desk.checklist ?? [];
-  const checklistOff =
-    checklist.length > 0 || shouldRestoreLocked(checklist);
-  if (!checklistOff && !tradesChanged) return desk;
+  const tradesChanged = trades.some(
+    (trade, index) => trade !== desk.trades[index],
+  );
+  if (!needChecklist && !tradesChanged) return desk;
   return {
     ...desk,
-    checklist: toChecklistTemplate(DEFAULT_CONFLUENCES),
+    checklist: needChecklist ? toChecklistTemplate(source) : desk.checklist,
     trades,
   };
 }
@@ -100,7 +117,7 @@ export function createDefaultBoard(template?: Confluence[]): BoardState {
     recentTickers: [],
     bias: "bullish",
     wave: "A",
-    confluences: createBlankConfluences(template ?? DEFAULT_CONFLUENCES),
+    confluences: createBlankConfluences(template),
   };
 }
 
@@ -119,7 +136,7 @@ export function createTradeRecord(
   template?: Confluence[],
 ): Trade {
   const now = Date.now();
-  const board = createDefaultBoard(template ?? DEFAULT_CONFLUENCES);
+  const board = createDefaultBoard(template);
   return {
     id,
     createdAt: now,

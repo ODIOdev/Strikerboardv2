@@ -11,7 +11,7 @@ import {
 } from "@/lib/profile";
 import { getSupabase } from "@/lib/supabase/client";
 import type { DeskState } from "@/lib/types";
-import { ensureDeskChecklist } from "@/lib/default-checklist";
+import { deskPrintCount } from "@/lib/default-checklist";
 import { peekUsers, replaceUsersState, type UsersState } from "@/lib/users";
 
 const BOOK_ID = "striker-board";
@@ -112,7 +112,7 @@ export async function pullCloud(): Promise<CloudBook | null> {
       typeof raw.updatedAt === "number"
         ? raw.updatedAt
         : Date.parse(String(data.updated_at ?? "")) || 0,
-    desk: ensureDeskChecklist(raw.desk),
+    desk: raw.desk,
     ideas: Array.isArray(raw.ideas) ? raw.ideas : [],
     profile: raw.profile ?? { name: "", handle: "" },
     users: raw.users ?? { currentId: "", users: [] },
@@ -131,8 +131,16 @@ export async function hydrateFromCloud() {
       return;
     }
     if (remote.updatedAt > local.updatedAt) {
+      if (deskPrintCount(remote.desk) === 0 && deskPrintCount(local.desk) > 0) {
+        touchStamp();
+        await pushCloud();
+        return;
+      }
       apply(remote);
-      await pushCloud();
+      if (deskPrintCount(remote.desk) === 0) {
+        touchStamp();
+        await pushCloud();
+      }
       return;
     }
     if (local.updatedAt >= remote.updatedAt) {

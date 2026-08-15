@@ -1,4 +1,4 @@
-import { createEmptyDesk, createTradeRecord, ensureDeskChecklist } from "./default-checklist";
+import { createEmptyDesk, createTradeRecord, ensureDeskChecklist, toChecklistTemplate } from "./default-checklist";
 import { inferAssetClass, normalizeTicker, outcomeAtExit, pnlAtExit } from "./calculator";
 import { csvToDesk } from "./csv";
 import { loadDesk, saveDesk } from "./storage";
@@ -24,16 +24,12 @@ export function subscribeDesk(listener: () => void) {
 
 export function getDeskSnapshot(): DeskState {
   if (!loaded) {
-    snapshot = loadDesk();
+    const raw = loadDesk();
+    snapshot = ensureDeskChecklist(raw);
     loaded = true;
-  }
-  const next = ensureDeskChecklist(snapshot);
-  if (next !== snapshot) {
-    snapshot = next;
-    if (typeof window !== "undefined") {
+    if (typeof window !== "undefined" && snapshot !== raw) {
       saveDesk(snapshot);
       queueCloudPush();
-      queueMicrotask(emit);
     }
   }
   return snapshot;
@@ -58,7 +54,7 @@ export function writeDesk(
 }
 
 export function createTrade(ticker?: string): Trade {
-  const trade = createTradeRecord();
+  const trade = createTradeRecord(undefined, getDeskSnapshot().checklist);
   const symbol = ticker ? normalizeTicker(ticker) : "";
   if (symbol) {
     trade.ticker = symbol;
@@ -121,6 +117,7 @@ export function closeTrade(id: string, exitPrice: number): ClosedTrade | null {
 export function writeTrade(
   id: string,
   next: Trade | ((prev: Trade) => Trade),
+  options?: { syncChecklist?: boolean },
 ) {
   writeDesk((prev) => {
     const current = prev.trades.find((trade) => trade.id === id);
@@ -131,6 +128,9 @@ export function writeTrade(
       trades: prev.trades.map((trade) =>
         trade.id === id ? { ...updated, updatedAt: Date.now() } : trade,
       ),
+      checklist: options?.syncChecklist
+        ? toChecklistTemplate(updated.confluences)
+        : prev.checklist,
     };
   });
 }
