@@ -24,6 +24,7 @@ import type {
 import {
   CATEGORIES,
   TIMEFRAMES,
+  TF_SIDES,
   isNewsCategory,
   isStructureCategory,
   isZoneCategory,
@@ -31,6 +32,7 @@ import {
   newsToneFromSentiment,
   resolveCategory,
 } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 type ConfluenceBoardProps = {
   result: ScoreResult;
@@ -59,10 +61,10 @@ const WIN_STYLE = {
   },
 } as const;
 
-const TF_CHIP: Record<Timeframe, string> = {
-  5: "bg-[#4de8c8]/20 text-[#4de8c8]",
-  15: "bg-[#f4c430]/20 text-[#f4c430]",
-  30: "bg-[#b6ff3b]/20 text-[#b6ff3b]",
+const SIDE_LABEL: Record<TfSide, { short: string; long: string }> = {
+  bullish: { short: "L", long: "LONG" },
+  bearish: { short: "S", long: "SHORT" },
+  range: { short: "R", long: "RANGE" },
 };
 
 export function ConfluenceBoard({
@@ -341,120 +343,12 @@ export function ConfluenceBoard({
                                   </button>
                                 </div>
                               ) : (
-                              <div className="grid min-w-0 flex-1 grid-cols-3 gap-1 lg:gap-2">
-                              {TIMEFRAMES.map((timeframe) => {
-                                const tfBias = item.biasByTf?.[timeframe] ?? "bullish";
-                                const zonePlay =
-                                  item.zoneByTf?.[timeframe] ?? "reaction";
-                                return (
-                                  <div
-                                    key={timeframe}
-                                    className="flex min-w-0 flex-col gap-0.5 overflow-hidden rounded-lg border border-white/10 p-0.5"
-                                  >
-                                    <span
-                                      className={`inline-flex h-6 w-full items-center justify-center rounded-md font-mono text-[10px] tracking-widest ${TF_CHIP[timeframe]}`}
-                                    >
-                                      {timeframe}m
-                                    </span>
-                                    <div className="grid grid-cols-3 gap-0.5">
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          onTfBias(item.id, timeframe, "bullish")
-                                        }
-                                        className={`truncate rounded-md px-0.5 py-1 text-center font-mono text-[9px] tracking-wide transition ${
-                                          tfBias === "bullish"
-                                            ? "bg-[#b6ff3b] text-[#0b1204]"
-                                            : "text-muted-foreground hover:text-foreground"
-                                        }`}
-                                      >
-                                        <span className="lg:hidden">L</span>
-                                        <span className="hidden lg:inline">LONG</span>
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          onTfBias(item.id, timeframe, "bearish")
-                                        }
-                                        className={`truncate rounded-md px-0.5 py-1 text-center font-mono text-[9px] tracking-wide transition ${
-                                          tfBias === "bearish"
-                                            ? "bg-[#ff3b5c] text-[#1a0508]"
-                                            : "text-muted-foreground hover:text-foreground"
-                                        }`}
-                                      >
-                                        <span className="lg:hidden">S</span>
-                                        <span className="hidden lg:inline">SHORT</span>
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          onTfBias(item.id, timeframe, "range")
-                                        }
-                                        className={`truncate rounded-md px-0.5 py-1 text-center font-mono text-[9px] tracking-wide transition ${
-                                          tfBias === "range"
-                                            ? "bg-gold text-primary-foreground"
-                                            : "text-muted-foreground hover:text-foreground"
-                                        }`}
-                                      >
-                                        <span className="lg:hidden">R</span>
-                                        <span className="hidden lg:inline">RANGE</span>
-                                      </button>
-                                    </div>
-                                    {showZonePlay ? (
-                                      <div
-                                        className="grid grid-cols-2 gap-0.5"
-                                        aria-label={`${timeframe}m zone play`}
-                                      >
-                                        <button
-                                          type="button"
-                                          title="Reaction · 50 pts"
-                                          aria-pressed={zonePlay === "reaction"}
-                                          onClick={() =>
-                                            onTfZone(
-                                              item.id,
-                                              timeframe,
-                                              "reaction",
-                                            )
-                                          }
-                                          className={`truncate rounded-md px-0.5 py-1 text-center font-mono text-[8px] tracking-wide transition ${
-                                            zonePlay === "reaction"
-                                              ? "bg-[#4de8c8] text-[#041210]"
-                                              : "text-muted-foreground hover:text-foreground"
-                                          }`}
-                                        >
-                                          <span className="lg:hidden">RXN</span>
-                                          <span className="hidden lg:inline">
-                                            REACTION
-                                          </span>
-                                        </button>
-                                        <button
-                                          type="button"
-                                          title="Breakout · 75 pts"
-                                          aria-pressed={zonePlay === "breakout"}
-                                          onClick={() =>
-                                            onTfZone(
-                                              item.id,
-                                              timeframe,
-                                              "breakout",
-                                            )
-                                          }
-                                          className={`truncate rounded-md px-0.5 py-1 text-center font-mono text-[8px] tracking-wide transition ${
-                                            zonePlay === "breakout"
-                                              ? "bg-[#ff8a3b] text-[#1a0c04]"
-                                              : "text-muted-foreground hover:text-foreground"
-                                          }`}
-                                        >
-                                          <span className="lg:hidden">BO</span>
-                                          <span className="hidden lg:inline">
-                                            BREAKOUT
-                                          </span>
-                                        </button>
-                                      </div>
-                                    ) : null}
-                                  </div>
-                                );
-                              })}
-                              </div>
+                              <TfPad
+                                item={item}
+                                showZonePlay={showZonePlay}
+                                onTfBias={onTfBias}
+                                onTfZone={onTfZone}
+                              />
                               )}
 
                               <div className="ml-auto flex items-center gap-2">
@@ -543,6 +437,129 @@ export function ConfluenceBoard({
 
 function clampWeight(value: string) {
   return Math.min(100, Math.max(1, Number(value) || 1));
+}
+
+const SIDE_INK: Record<TfSide, string> = {
+  bullish: "#b6ff3b",
+  bearish: "#ff3b5c",
+  range: "#f4c430",
+};
+
+function TfPad({
+  item,
+  showZonePlay,
+  onTfBias,
+  onTfZone,
+}: {
+  item: Confluence;
+  showZonePlay: boolean;
+  onTfBias: (id: string, timeframe: Timeframe, bias: TfSide) => void;
+  onTfZone: (id: string, timeframe: Timeframe, play: ZonePlay) => void;
+}) {
+  const [selected, setSelected] = useState<Timeframe>(5);
+  const selectedBias = item.biasByTf?.[selected] ?? "bullish";
+  const selectedPlay = item.zoneByTf?.[selected] ?? "reaction";
+
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-1">
+      <div
+        role="tablist"
+        aria-label="Timeframe"
+        className="inline-flex h-7 shrink-0 overflow-hidden rounded-md border border-white/10 bg-black/55"
+      >
+        {TIMEFRAMES.map((timeframe) => {
+          const bias = item.biasByTf?.[timeframe] ?? "bullish";
+          const on = selected === timeframe;
+          return (
+            <button
+              key={timeframe}
+              type="button"
+              role="tab"
+              aria-selected={on}
+              aria-label={`${timeframe}m ${SIDE_LABEL[bias].long}`}
+              onClick={() => setSelected(timeframe)}
+              className={cn(
+                "relative flex h-full w-8 items-center justify-center font-mono text-[10px] tabular-nums tracking-wide transition",
+                on
+                  ? "bg-white/10 text-foreground"
+                  : "text-muted-foreground hover:bg-white/5 hover:text-foreground",
+              )}
+            >
+              {timeframe}m
+              <span
+                className="absolute inset-x-1 bottom-0.5 h-0.5 rounded-full"
+                style={{
+                  background: SIDE_INK[bias],
+                  opacity: on ? 1 : 0.45,
+                }}
+              />
+            </button>
+          );
+        })}
+      </div>
+      <div
+        role="group"
+        aria-label={`${selected}m direction`}
+        className="inline-flex h-7 shrink-0 overflow-hidden rounded-md border border-white/10 bg-black/55"
+      >
+        {TF_SIDES.map((side) => {
+          const on = selectedBias === side;
+          return (
+            <button
+              key={side}
+              type="button"
+              aria-pressed={on}
+              aria-label={SIDE_LABEL[side].long}
+              onClick={() => onTfBias(item.id, selected, side)}
+              className={cn(
+                "flex h-full w-7 items-center justify-center font-mono text-[10px] font-semibold tracking-widest transition",
+                !on && "text-muted-foreground hover:bg-white/5 hover:text-foreground",
+              )}
+              style={on ? WIN_STYLE[side] : undefined}
+            >
+              {SIDE_LABEL[side].short}
+            </button>
+          );
+        })}
+      </div>
+      {showZonePlay ? (
+        <div
+          role="group"
+          aria-label={`${selected}m zone play`}
+          className="inline-flex h-7 shrink-0 overflow-hidden rounded-md border border-white/10 bg-black/55"
+        >
+          <button
+            type="button"
+            title="Reaction · 50 pts"
+            aria-pressed={selectedPlay === "reaction"}
+            onClick={() => onTfZone(item.id, selected, "reaction")}
+            className={cn(
+              "flex h-full items-center px-1.5 font-mono text-[9px] tracking-widest transition",
+              selectedPlay === "reaction"
+                ? "bg-[#4de8c8] text-[#041210]"
+                : "text-muted-foreground hover:bg-white/5 hover:text-foreground",
+            )}
+          >
+            RXN
+          </button>
+          <button
+            type="button"
+            title="Breakout · 75 pts"
+            aria-pressed={selectedPlay === "breakout"}
+            onClick={() => onTfZone(item.id, selected, "breakout")}
+            className={cn(
+              "flex h-full items-center px-1.5 font-mono text-[9px] tracking-widest transition",
+              selectedPlay === "breakout"
+                ? "bg-[#ff8a3b] text-[#1a0c04]"
+                : "text-muted-foreground hover:bg-white/5 hover:text-foreground",
+            )}
+          >
+            BO
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function heatColor(value: number) {

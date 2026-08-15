@@ -11,7 +11,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { deskToCsv } from "@/lib/csv";
+import { deskToCsv, csvToDesk, type CsvImportResult } from "@/lib/csv";
 import { getDeskSnapshot, writeRecents } from "@/lib/desk-store";
 import { erasePlatform } from "@/lib/erase";
 import { useDesk } from "@/hooks/use-desk";
@@ -35,6 +35,11 @@ export function HomeSettings({ nav = false, utility = false }: HomeSettingsProps
   const { recentTickers, importCsvBook } = useDesk();
   const fileRef = useRef<HTMLInputElement>(null);
   const [csvNote, setCsvNote] = useState("");
+  const [pendingCsv, setPendingCsv] = useState<{
+    name: string;
+    text: string;
+    preview: CsvImportResult;
+  } | null>(null);
   const [eraseArmed, setEraseArmed] = useState(false);
 
   function createCsv() {
@@ -43,19 +48,36 @@ export function HomeSettings({ nav = false, utility = false }: HomeSettingsProps
     setCsvNote("CSV downloaded. Fill rows in Excel, then import.");
   }
 
-  async function onImport(file: File | undefined) {
+  async function onPickCsv(file: File | undefined) {
     if (!file) return;
     const text = await file.text();
-    const result = importCsvBook(text);
+    const preview = csvToDesk(text);
+    setPendingCsv({ name: file.name, text, preview });
+    const added = preview.trades.length + preview.closedTrades.length;
+    setCsvNote(
+      added === 0
+        ? preview.skipped
+          ? `${preview.skipped} row${preview.skipped === 1 ? "" : "s"} skipped. Need a ticker.`
+          : "No trades found in that CSV."
+        : `Ready: ${preview.trades.length} open · ${preview.closedTrades.length} closed${
+            preview.skipped ? ` · ${preview.skipped} skipped` : ""
+          }.`,
+    );
+    if (fileRef.current) fileRef.current.value = "";
+  }
+
+  function loadCsv() {
+    if (!pendingCsv) return;
+    const result = importCsvBook(pendingCsv.text);
     const added = result.trades.length + result.closedTrades.length;
     setCsvNote(
       added === 0
         ? result.skipped
           ? `${result.skipped} row${result.skipped === 1 ? "" : "s"} skipped. Need a ticker.`
           : "No trades found in that CSV."
-        : `Imported ${result.trades.length} open · ${result.closedTrades.length} closed.`,
+        : `Loaded ${result.trades.length} open · ${result.closedTrades.length} closed.`,
     );
-    if (fileRef.current) fileRef.current.value = "";
+    setPendingCsv(null);
   }
 
   return (
@@ -132,7 +154,7 @@ export function HomeSettings({ nav = false, utility = false }: HomeSettingsProps
             </p>
             <p className="mt-2 text-sm text-muted-foreground">
               Create a CSV of the desk, edit tickers and levels in a spreadsheet,
-              then import it back.
+              then upload and load it back.
             </p>
             <div className="mt-3 grid grid-cols-2 gap-2">
               <Button
@@ -145,10 +167,11 @@ export function HomeSettings({ nav = false, utility = false }: HomeSettingsProps
               </Button>
               <Button
                 type="button"
-                className="font-mono text-[10px] tracking-widest"
+                variant="outline"
+                className="border-white/10 font-mono text-[10px] tracking-widest"
                 onClick={() => fileRef.current?.click()}
               >
-                Import CSV
+                Upload CSV
               </Button>
             </div>
             <input
@@ -156,8 +179,22 @@ export function HomeSettings({ nav = false, utility = false }: HomeSettingsProps
               type="file"
               accept=".csv,text/csv"
               className="sr-only"
-              onChange={(event) => void onImport(event.target.files?.[0])}
+              onChange={(event) => void onPickCsv(event.target.files?.[0])}
             />
+            {pendingCsv ? (
+              <div className="mt-3 space-y-2 rounded-lg border border-gold/20 bg-gold/5 px-3 py-2">
+                <p className="truncate font-mono text-[10px] tracking-widest text-gold">
+                  {pendingCsv.name}
+                </p>
+                <Button
+                  type="button"
+                  className="w-full font-mono text-[10px] tracking-widest"
+                  onClick={loadCsv}
+                >
+                  Load CSV
+                </Button>
+              </div>
+            ) : null}
             {csvNote ? (
               <p className="mt-2 font-mono text-[10px] tracking-widest text-gold">
                 {csvNote}

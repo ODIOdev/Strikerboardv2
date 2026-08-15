@@ -85,8 +85,8 @@ export function TradeHome() {
                   />
                 </h2>
                 <p className="max-w-xl text-left text-sm leading-relaxed text-muted-foreground">
-                  Score a ticker by activating confluence prints across 5m, 15m, and
-                  30m. The desk reads the board for long, short, or range, then grades
+                  Score a ticker by activating confluence prints across 1m, 5m, 15m,
+                  and 30m. The desk reads the board for long, short, or range, then grades
                   the setup A–C so you only fire when the rails are stacked.
                 </p>
               </div>
@@ -123,7 +123,7 @@ export function TradeHome() {
             <div className="space-y-8">
               {ungrouped.length > 0 ? (
                 <TradeSection
-                  title="Ungrouped"
+                  title="Active trades"
                   trades={ungrouped}
                   groups={groups}
                   now={now}

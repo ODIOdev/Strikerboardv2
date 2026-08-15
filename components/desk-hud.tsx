@@ -328,57 +328,58 @@ function BookExposure({
         type="button"
         onClick={() => setOpen((prev) => !prev)}
         aria-expanded={open}
-        className="flex w-full flex-col gap-3 p-4 text-left"
+        className="flex w-full items-center gap-3 px-4 py-3 text-left"
       >
-        <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
           <p className="font-mono text-[10px] tracking-[0.4em] text-muted-foreground">
             BOOK EXPOSURE
           </p>
-          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-white/35 bg-white/10 px-2.5 py-1.5 font-mono text-[10px] font-bold tracking-[0.22em] text-white shadow-[0_0_16px_rgb(255_255_255_/_18%)]">
-            {open ? "CLOSE DETAILS" : "OPEN DETAILS"}
-            <ChevronRight
-              className={`size-3.5 transition-transform ${open ? "rotate-90" : ""}`}
-            />
-          </span>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1fr)] sm:items-end">
-          <div>
-            <p className="font-mono text-4xl font-black tracking-tighter text-gold">
+          <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+            <span className="font-mono text-xl font-black tracking-tighter text-gold">
               {rr}
-            </p>
-            <p className="mt-1 font-mono text-[10px] tracking-widest text-muted-foreground">
+            </span>
+            <span className="font-mono text-[10px] tracking-widest text-muted-foreground">
               {stats.count} {stats.count === 1 ? "TRADE" : "TRADES"}
-            </p>
+            </span>
+            <span className="font-mono text-[10px] tracking-widest text-[#ff3b5c]">
+              {money(stats.totalRisk, currency)}
+            </span>
+            <span className="font-mono text-[10px] tracking-widest text-[#b6ff3b]">
+              {money(stats.totalReward, currency)}
+            </span>
           </div>
-          <ExposureChip
-            label="RISK"
-            value={money(stats.totalRisk, currency)}
-            color="#ff3b5c"
-            share={span === 0 ? 0 : riskShare}
-          />
-          <ExposureChip
-            label="REWARD"
-            value={money(stats.totalReward, currency)}
-            color="#b6ff3b"
-            share={span === 0 ? 0 : rewardShare}
-          />
         </div>
-
-        <div className="flex h-1.5 overflow-hidden rounded-full bg-white/8">
-          <span
-            className="h-full bg-[#ff3b5c]"
-            style={{ width: `${riskShare}%` }}
-          />
-          <span
-            className="h-full bg-[#b6ff3b]"
-            style={{ width: `${rewardShare}%` }}
-          />
-        </div>
+        <ChevronRight
+          className={`size-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
+        />
       </button>
 
       {open ? (
         <div className="border-t border-white/8 px-4 pb-4">
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <ExposureChip
+              label="RISK"
+              value={money(stats.totalRisk, currency)}
+              color="#ff3b5c"
+              share={span === 0 ? 0 : riskShare}
+            />
+            <ExposureChip
+              label="REWARD"
+              value={money(stats.totalReward, currency)}
+              color="#b6ff3b"
+              share={span === 0 ? 0 : rewardShare}
+            />
+          </div>
+          <div className="mt-3 flex h-1.5 overflow-hidden rounded-full bg-white/8">
+            <span
+              className="h-full bg-[#ff3b5c]"
+              style={{ width: `${riskShare}%` }}
+            />
+            <span
+              className="h-full bg-[#b6ff3b]"
+              style={{ width: `${rewardShare}%` }}
+            />
+          </div>
           <ExposureList items={stats.exposure} />
         </div>
       ) : null}

@@ -25,7 +25,7 @@ export const ZONE_PLAY_POINTS: Record<ZonePlay, number> = {
   breakout: 75,
 };
 
-export const TF_SPAN = 0.9 + 1 + 1.1;
+export const TF_SPAN = 0.8 + 0.9 + 1 + 1.1;
 
 export function bandFor(score: number): Band {
   if (score >= 80) return "Prime";
@@ -40,6 +40,7 @@ export function gradeFor(score: number): Wave {
 }
 
 export function timeframeMultiplier(timeframe: Timeframe): number {
+  if (timeframe === 1) return 0.8;
   if (timeframe === 5) return 0.9;
   if (timeframe === 30) return 1.1;
   return 1;
@@ -142,10 +143,14 @@ function majorityVote(votes: Array<TfSide | "even">): TfSide | "even" {
   const bull = votes.filter((vote) => vote === "bullish").length;
   const bear = votes.filter((vote) => vote === "bearish").length;
   const range = votes.filter((vote) => vote === "range").length;
-  if (bull >= 2) return "bullish";
-  if (bear >= 2) return "bearish";
-  if (range >= 2) return "range";
-  return "even";
+  const best = Math.max(bull, bear, range);
+  if (best === 0) return "even";
+  const tied =
+    Number(bull === best) + Number(bear === best) + Number(range === best);
+  if (tied > 1) return "even";
+  if (bull === best) return "bullish";
+  if (bear === best) return "bearish";
+  return "range";
 }
 
 function timeframeVote(

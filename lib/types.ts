@@ -1,7 +1,7 @@
 export type Bias = "bullish" | "bearish";
 export type TfSide = Bias | "range";
 export type Wave = "A" | "B" | "C";
-export type Timeframe = 5 | 15 | 30;
+export type Timeframe = 1 | 5 | 15 | 30;
 export type Category =
   | "News / Events"
   | "Market Bias"
@@ -13,7 +13,7 @@ export type Category =
 export type Band = "Prime" | "Valid" | "Watch";
 
 export const TF_SIDES: TfSide[] = ["bullish", "bearish", "range"];
-export const TIMEFRAMES: Timeframe[] = [5, 15, 30];
+export const TIMEFRAMES: Timeframe[] = [1, 5, 15, 30];
 export const WAVES: Wave[] = ["A", "B", "C"];
 export const GRADE_COLOR: Record<Wave, string> = {
   A: "#b6ff3b",
@@ -115,11 +115,11 @@ export type TfZone = Record<Timeframe, ZonePlay>;
 export const ZONE_PLAYS: ZonePlay[] = ["reaction", "breakout"];
 
 export function createTfBias(bias: TfSide = "bullish"): TfBias {
-  return { 5: bias, 15: bias, 30: bias };
+  return { 1: bias, 5: bias, 15: bias, 30: bias };
 }
 
 export function createTfZone(play: ZonePlay = "reaction"): TfZone {
-  return { 5: play, 15: play, 30: play };
+  return { 1: play, 5: play, 15: play, 30: play };
 }
 
 export type Confluence = {

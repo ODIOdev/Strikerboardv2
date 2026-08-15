@@ -112,7 +112,16 @@ export function deskToCsv(desk: DeskState) {
   return `${lines.join("\n")}\n`;
 }
 
-function splitCsvLine(line: string) {
+function detectDelimiter(header: string) {
+  const comma = (header.match(/,/g) ?? []).length;
+  const semi = (header.match(/;/g) ?? []).length;
+  const tab = (header.match(/\t/g) ?? []).length;
+  if (semi > comma && semi >= tab) return ";";
+  if (tab > comma && tab >= semi) return "\t";
+  return ",";
+}
+
+function splitCsvLine(line: string, delimiter = ",") {
   const cells: string[] = [];
   let current = "";
   let quoted = false;
@@ -129,7 +138,7 @@ function splitCsvLine(line: string) {
       }
     } else if (char === '"') {
       quoted = true;
-    } else if (char === ",") {
+    } else if (char === delimiter) {
       cells.push(current.trim());
       current = "";
     } else {
@@ -182,16 +191,23 @@ function isRight(value: string): value is OptionRight {
 }
 
 export function csvToDesk(text: string): CsvImportResult {
-  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim());
+  const lines = text
+    .replace(/^\uFEFF/, "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !/^sep=/i.test(line));
   if (lines.length < 2) {
     return { trades: [], closedTrades: [], groups: [], skipped: 0 };
   }
 
-  const headers = splitCsvLine(lines[0]).map((item) => item.toLowerCase());
+  const delimiter = detectDelimiter(lines[0]);
+  const headers = splitCsvLine(lines[0], delimiter).map((item) =>
+    item.toLowerCase().replace(/[\s_]+/g, ""),
+  );
   const index = (name: string) => headers.indexOf(name);
   const read = (cells: string[], name: string, aliases: string[] = []) => {
     for (const key of [name, ...aliases]) {
-      const at = index(key);
+      const at = index(key.replace(/[\s_]+/g, ""));
       if (at >= 0) return cells[at] ?? "";
     }
     return "";
@@ -204,8 +220,12 @@ export function csvToDesk(text: string): CsvImportResult {
   let skipped = 0;
 
   for (const line of lines.slice(1)) {
-    const cells = splitCsvLine(line);
-    const ticker = normalizeTicker(read(cells, "ticker", ["symbol"]));
+    const cells = splitCsvLine(line, delimiter);
+    if (cells.every((cell) => !cell)) continue;
+    const ticker = normalizeTicker(
+      read(cells, "ticker", ["symbol"]) ||
+        (index("ticker") < 0 && index("symbol") < 0 ? cells[0] ?? "" : ""),
+    );
     if (!ticker) {
       skipped += 1;
       continue;

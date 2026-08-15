@@ -24,7 +24,7 @@ import type {
   Wave,
   ZonePlay,
 } from "./types";
-import { createTfBias, createTfZone, resolveCategory, clampSentiment, isNewsCategory, newsToneFromSentiment } from "./types";
+import { createTfBias, createTfZone, resolveCategory, clampSentiment, isNewsCategory, newsToneFromSentiment, TIMEFRAMES } from "./types";
 
 const DESK_KEY = "striker-desk-v5";
 const PREV_DESK_KEYS = ["striker-desk-v4", "striker-desk-v3", "striker-desk-v2"];
@@ -117,8 +117,12 @@ function readTfZone(value: unknown): TfZone {
       isZonePlay(raw[15] ?? raw["15"]) &&
       isZonePlay(raw[30] ?? raw["30"])
     ) {
+      const five = (raw[5] ?? raw["5"]) as ZonePlay;
       return {
-        5: (raw[5] ?? raw["5"]) as ZonePlay,
+        1: isZonePlay(raw[1] ?? raw["1"])
+          ? ((raw[1] ?? raw["1"]) as ZonePlay)
+          : five,
+        5: five,
         15: (raw[15] ?? raw["15"]) as ZonePlay,
         30: (raw[30] ?? raw["30"]) as ZonePlay,
       };
@@ -135,8 +139,12 @@ function readTfBias(value: unknown, fallbackBias: Bias): TfBias {
       isTfSide(raw[15] ?? raw["15"]) &&
       isTfSide(raw[30] ?? raw["30"])
     ) {
+      const five = (raw[5] ?? raw["5"]) as TfSide;
       return {
-        5: (raw[5] ?? raw["5"]) as TfSide,
+        1: isTfSide(raw[1] ?? raw["1"])
+          ? ((raw[1] ?? raw["1"]) as TfSide)
+          : five,
+        5: five,
         15: (raw[15] ?? raw["15"]) as TfSide,
         30: (raw[30] ?? raw["30"]) as TfSide,
       };
@@ -158,7 +166,7 @@ function readNews(
         : newsToneFromSentiment(sentiment);
     return { sentiment, newsTone };
   }
-  const sides = [biasByTf[5], biasByTf[15], biasByTf[30]];
+  const sides = TIMEFRAMES.map((tf) => biasByTf[tf]);
   const bear = sides.filter((side) => side === "bearish").length;
   const bull = sides.filter((side) => side === "bullish").length;
   if (bear > bull) return { newsTone: "bad", sentiment: 0 };

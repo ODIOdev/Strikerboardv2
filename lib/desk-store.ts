@@ -1,4 +1,4 @@
-import { createEmptyDesk, createTradeRecord, deskNeedsLockedRepair, ensureDeskChecklist } from "./default-checklist";
+import { createEmptyDesk, createTradeRecord, ensureDeskChecklist } from "./default-checklist";
 import { inferAssetClass, normalizeTicker, outcomeAtExit, pnlAtExit } from "./calculator";
 import { csvToDesk } from "./csv";
 import { loadDesk, saveDesk } from "./storage";
@@ -24,12 +24,16 @@ export function subscribeDesk(listener: () => void) {
 
 export function getDeskSnapshot(): DeskState {
   if (!loaded) {
-    const raw = loadDesk();
-    snapshot = ensureDeskChecklist(raw);
+    snapshot = loadDesk();
     loaded = true;
-    if (typeof window !== "undefined" && deskNeedsLockedRepair(raw)) {
+  }
+  const next = ensureDeskChecklist(snapshot);
+  if (next !== snapshot) {
+    snapshot = next;
+    if (typeof window !== "undefined") {
       saveDesk(snapshot);
       queueCloudPush();
+      queueMicrotask(emit);
     }
   }
   return snapshot;
